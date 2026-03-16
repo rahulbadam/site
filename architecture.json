@@ -1,0 +1,3494 @@
+{
+  "summary": {
+    "platform_name": "VivahBandhan",
+    "description": "Production-ready Indian matrimonial platform with caste-aware matching, privacy safeguards, and scalable architecture",
+    "target_mau": 100000,
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "TypeScript",
+        "Redux Toolkit",
+        "TailwindCSS",
+        "React Query",
+        "i18next"
+      ],
+      "backend": [
+        "Node.js",
+        "Fastify",
+        "REST API",
+        "JWT",
+        "Argon2"
+      ],
+      "database": [
+        "PostgreSQL",
+        "Redis"
+      ],
+      "search": "OpenSearch",
+      "storage": "S3 Compatible Object Storage",
+      "infra": [
+        "Docker",
+        "Kubernetes",
+        "Nginx Ingress"
+      ],
+      "monitoring": [
+        "Prometheus",
+        "Grafana",
+        "Sentry"
+      ],
+      "ci_cd": "GitHub Actions",
+      "realtime": "WebRTC SFU",
+      "messaging": "Redis Streams"
+    },
+    "business_model": {
+      "free_tier": {
+        "profile_searches_per_day": 20,
+        "interests_per_day": 5,
+        "max_shortlisted": 50,
+        "messaging": "template_only",
+        "contact_info_visible": false
+      },
+      "premium_tier": {
+        "phone_numbers_visible": true,
+        "unlimited_messaging": true,
+        "profile_boost": true,
+        "featured_listing": true,
+        "advanced_filters": true,
+        "profile_viewers": true,
+        "analytics": true,
+        "priority_support": true
+      }
+    }
+  },
+  "erd_ddl": {
+    "tables": [
+      {
+        "name": "users",
+        "ddl": "CREATE TABLE users (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  email VARCHAR(255) UNIQUE NOT NULL,\n  phone VARCHAR(20) UNIQUE,\n  password_hash VARCHAR(255) NOT NULL,\n  email_verified BOOLEAN DEFAULT FALSE,\n  phone_verified BOOLEAN DEFAULT FALSE,\n  is_active BOOLEAN DEFAULT TRUE,\n  is_banned BOOLEAN DEFAULT FALSE,\n  ban_reason TEXT,\n  last_login_at TIMESTAMP WITH TIME ZONE,\n  last_login_ip INET,\n  device_fingerprint VARCHAR(255),\n  fraud_score DECIMAL(5,2) DEFAULT 0.00,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  deleted_at TIMESTAMP WITH TIME ZONE\n);\n\nCREATE INDEX idx_users_email ON users(email);\nCREATE INDEX idx_users_phone ON users(phone);\nCREATE INDEX idx_users_fraud_score ON users(fraud_score);\nCREATE INDEX idx_users_created_at ON users(created_at);"
+      },
+      {
+        "name": "profiles",
+        "ddl": "CREATE TABLE profiles (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  name VARCHAR(255) NOT NULL,\n  gender VARCHAR(20) NOT NULL CHECK (gender IN ('male', 'female', 'other')),\n  date_of_birth DATE NOT NULL,\n  age INTEGER GENERATED ALWAYS AS (EXTRACT(YEAR FROM AGE(date_of_birth))::INTEGER) STORED,\n  height_cm INTEGER,\n  religion VARCHAR(100),\n  caste VARCHAR(100),\n  caste_consent BOOLEAN DEFAULT FALSE,\n  caste_consent_at TIMESTAMP WITH TIME ZONE,\n  sub_caste VARCHAR(100),\n  education VARCHAR(255),\n  occupation VARCHAR(255),\n  income_range VARCHAR(50),\n  location_city VARCHAR(100),\n  location_state VARCHAR(100),\n  location_country VARCHAR(100) DEFAULT 'India',\n  location_pincode VARCHAR(10),\n  latitude DECIMAL(10,8),\n  longitude DECIMAL(11,8),\n  marital_status VARCHAR(50) CHECK (marital_status IN ('never_married', 'divorced', 'widowed', 'awaiting_divorce')),\n  diet VARCHAR(50) CHECK (diet IN ('vegetarian', 'non_vegetarian', 'eggetarian', 'vegan', 'jain')),\n  smoking VARCHAR(50) CHECK (smoking IN ('never', 'occasionally', 'regularly', 'quit')),\n  drinking VARCHAR(50) CHECK (drinking IN ('never', 'occasionally', 'regularly', 'quit')),\n  languages TEXT[],\n  about_me TEXT,\n  profile_completion_percentage INTEGER DEFAULT 0,\n  is_verified BOOLEAN DEFAULT FALSE,\n  verification_level INTEGER DEFAULT 0,\n  last_active_at TIMESTAMP WITH TIME ZONE,\n  profile_views_count INTEGER DEFAULT 0,\n  is_featured BOOLEAN DEFAULT FALSE,\n  featured_until TIMESTAMP WITH TIME ZONE,\n  is_boosted BOOLEAN DEFAULT FALSE,\n  boost_until TIMESTAMP WITH TIME ZONE,\n  astrology_enabled BOOLEAN DEFAULT FALSE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_profiles_user_id ON profiles(user_id);\nCREATE INDEX idx_profiles_gender ON profiles(gender);\nCREATE INDEX idx_profiles_age ON profiles(age);\nCREATE INDEX idx_profiles_religion ON profiles(religion);\nCREATE INDEX idx_profiles_caste ON profiles(caste) WHERE caste_consent = TRUE;\nCREATE INDEX idx_profiles_location_city ON profiles(location_city);\nCREATE INDEX idx_profiles_location_state ON profiles(location_state);\nCREATE INDEX idx_profiles_education ON profiles(education);\nCREATE INDEX idx_profiles_occupation ON profiles(occupation);\nCREATE INDEX idx_profiles_last_active ON profiles(last_active_at DESC);\nCREATE INDEX idx_profiles_verified ON profiles(is_verified);\nCREATE INDEX idx_profiles_age_gender ON profiles(age, gender);"
+      },
+      {
+        "name": "photos",
+        "ddl": "CREATE TABLE photos (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n  s3_key VARCHAR(500) NOT NULL,\n  s3_bucket VARCHAR(255) NOT NULL,\n  cdn_url VARCHAR(1000),\n  is_primary BOOLEAN DEFAULT FALSE,\n  is_verified BOOLEAN DEFAULT FALSE,\n  moderation_status VARCHAR(50) DEFAULT 'pending' CHECK (moderation_status IN ('pending', 'approved', 'rejected')),\n  moderation_notes TEXT,\n  photo_order INTEGER DEFAULT 0,\n  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  verified_at TIMESTAMP WITH TIME ZONE\n);\n\nCREATE INDEX idx_photos_profile_id ON photos(profile_id);\nCREATE INDEX idx_photos_moderation_status ON photos(moderation_status);\nCREATE INDEX idx_photos_primary ON photos(profile_id, is_primary);"
+      },
+      {
+        "name": "preferences",
+        "ddl": "CREATE TABLE preferences (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  preferred_age_min INTEGER DEFAULT 21,\n  preferred_age_max INTEGER DEFAULT 40,\n  preferred_height_min INTEGER,\n  preferred_height_max INTEGER,\n  preferred_religions TEXT[],\n  preferred_castes TEXT[],\n  preferred_educations TEXT[],\n  preferred_occupations TEXT[],\n  preferred_locations TEXT[],\n  preferred_marital_status TEXT[],\n  preferred_diet TEXT[],\n  preferred_smoking TEXT[],\n  preferred_drinking TEXT[],\n  preferred_languages TEXT[],\n  preferred_income_min INTEGER,\n  preferred_income_max INTEGER,\n  max_distance_km INTEGER,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(user_id)\n);\n\nCREATE INDEX idx_preferences_user_id ON preferences(user_id);"
+      },
+      {
+        "name": "interests",
+        "ddl": "CREATE TABLE interests (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'blocked')),\n  message TEXT,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(sender_id, receiver_id)\n);\n\nCREATE INDEX idx_interests_sender ON interests(sender_id);\nCREATE INDEX idx_interests_receiver ON interests(receiver_id);\nCREATE INDEX idx_interests_status ON interests(status);\nCREATE INDEX idx_interests_created ON interests(created_at DESC);"
+      },
+      {
+        "name": "matches",
+        "ddl": "CREATE TABLE matches (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user1_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  user2_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  compatibility_score DECIMAL(5,2),\n  match_source VARCHAR(50) CHECK (match_source IN ('mutual_interest', 'recommendation', 'search')),\n  astrology_score DECIMAL(5,2),\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(user1_id, user2_id),\n  CHECK (user1_id < user2_id)\n);\n\nCREATE INDEX idx_matches_user1 ON matches(user1_id);\nCREATE INDEX idx_matches_user2 ON matches(user2_id);\nCREATE INDEX idx_matches_score ON matches(compatibility_score DESC);"
+      },
+      {
+        "name": "messages",
+        "ddl": "CREATE TABLE messages (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  match_id UUID REFERENCES matches(id) ON DELETE CASCADE,\n  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  message_type VARCHAR(50) DEFAULT 'text' CHECK (message_type IN ('text', 'template', 'image', 'video_call_request')),\n  content TEXT,\n  template_id VARCHAR(100),\n  is_read BOOLEAN DEFAULT FALSE,\n  read_at TIMESTAMP WITH TIME ZONE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_messages_match ON messages(match_id);\nCREATE INDEX idx_messages_sender ON messages(sender_id);\nCREATE INDEX idx_messages_receiver ON messages(receiver_id);\nCREATE INDEX idx_messages_created ON messages(created_at DESC);\nCREATE INDEX idx_messages_unread ON messages(receiver_id, is_read) WHERE is_read = FALSE;"
+      },
+      {
+        "name": "shortlists",
+        "ddl": "CREATE TABLE shortlists (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n  notes TEXT,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(user_id, profile_id)\n);\n\nCREATE INDEX idx_shortlists_user ON shortlists(user_id);\nCREATE INDEX idx_shortlists_profile ON shortlists(profile_id);"
+      },
+      {
+        "name": "reports",
+        "ddl": "CREATE TABLE reports (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  reported_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  report_type VARCHAR(100) NOT NULL CHECK (report_type IN ('fake_profile', 'inappropriate_photo', 'harassment', 'scam', 'misleading_info', 'other')),\n  description TEXT,\n  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'under_review', 'resolved', 'dismissed')),\n  admin_notes TEXT,\n  resolved_by UUID REFERENCES users(id),\n  resolved_at TIMESTAMP WITH TIME ZONE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_reports_reporter ON reports(reporter_id);\nCREATE INDEX idx_reports_reported ON reports(reported_user_id);\nCREATE INDEX idx_reports_status ON reports(status);\nCREATE INDEX idx_reports_type ON reports(report_type);"
+      },
+      {
+        "name": "verifications",
+        "ddl": "CREATE TABLE verifications (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  verification_type VARCHAR(50) NOT NULL CHECK (verification_type IN ('email', 'phone', 'government_id', 'video', 'address')),\n  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'submitted', 'verified', 'rejected')),\n  document_s3_key VARCHAR(500),\n  document_type VARCHAR(100),\n  verification_data JSONB,\n  verified_by UUID REFERENCES users(id),\n  verified_at TIMESTAMP WITH TIME ZONE,\n  expires_at TIMESTAMP WITH TIME ZONE,\n  rejection_reason TEXT,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_verifications_user ON verifications(user_id);\nCREATE INDEX idx_verifications_type ON verifications(verification_type);\nCREATE INDEX idx_verifications_status ON verifications(status);"
+      },
+      {
+        "name": "fraud_scores",
+        "ddl": "CREATE TABLE fraud_scores (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  score DECIMAL(5,2) NOT NULL,\n  risk_level VARCHAR(20) CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),\n  factors JSONB,\n  device_fingerprint VARCHAR(255),\n  ip_address INET,\n  user_agent TEXT,\n  calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_fraud_user ON fraud_scores(user_id);\nCREATE INDEX idx_fraud_score ON fraud_scores(score DESC);\nCREATE INDEX idx_fraud_risk ON fraud_scores(risk_level);\nCREATE INDEX idx_fraud_device ON fraud_scores(device_fingerprint);\nCREATE INDEX idx_fraud_ip ON fraud_scores(ip_address);"
+      },
+      {
+        "name": "subscriptions",
+        "ddl": "CREATE TABLE subscriptions (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  plan_type VARCHAR(50) NOT NULL CHECK (plan_type IN ('free', 'premium_1m', 'premium_3m', 'premium_6m', 'premium_12m')),\n  status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled', 'refunded')),\n  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  expires_at TIMESTAMP WITH TIME ZONE,\n  cancelled_at TIMESTAMP WITH TIME ZONE,\n  auto_renew BOOLEAN DEFAULT FALSE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_subscriptions_user ON subscriptions(user_id);\nCREATE INDEX idx_subscriptions_status ON subscriptions(status);\nCREATE INDEX idx_subscriptions_expires ON subscriptions(expires_at);"
+      },
+      {
+        "name": "transactions",
+        "ddl": "CREATE TABLE transactions (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  subscription_id UUID REFERENCES subscriptions(id),\n  amount DECIMAL(10,2) NOT NULL,\n  currency VARCHAR(3) DEFAULT 'INR',\n  payment_method VARCHAR(50),\n  payment_gateway VARCHAR(50),\n  gateway_transaction_id VARCHAR(255),\n  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),\n  metadata JSONB,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_transactions_user ON transactions(user_id);\nCREATE INDEX idx_transactions_subscription ON transactions(subscription_id);\nCREATE INDEX idx_transactions_status ON transactions(status);\nCREATE INDEX idx_transactions_gateway ON transactions(gateway_transaction_id);"
+      },
+      {
+        "name": "audit_logs",
+        "ddl": "CREATE TABLE audit_logs (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID REFERENCES users(id) ON DELETE SET NULL,\n  action VARCHAR(100) NOT NULL,\n  entity_type VARCHAR(100),\n  entity_id UUID,\n  old_values JSONB,\n  new_values JSONB,\n  ip_address INET,\n  user_agent TEXT,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_audit_user ON audit_logs(user_id);\nCREATE INDEX idx_audit_action ON audit_logs(action);\nCREATE INDEX idx_audit_entity ON audit_logs(entity_type, entity_id);\nCREATE INDEX idx_audit_created ON audit_logs(created_at DESC);"
+      },
+      {
+        "name": "profile_views",
+        "ddl": "CREATE TABLE profile_views (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  viewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n  viewed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(viewer_id, profile_id, DATE(viewed_at))\n);\n\nCREATE INDEX idx_views_viewer ON profile_views(viewer_id);\nCREATE INDEX idx_views_profile ON profile_views(profile_id);\nCREATE INDEX idx_views_date ON profile_views(viewed_at DESC);"
+      },
+      {
+        "name": "refresh_tokens",
+        "ddl": "CREATE TABLE refresh_tokens (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  token_hash VARCHAR(255) NOT NULL,\n  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,\n  revoked BOOLEAN DEFAULT FALSE,\n  revoked_at TIMESTAMP WITH TIME ZONE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);\nCREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);\nCREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at);"
+      },
+      {
+        "name": "otp_verifications",
+        "ddl": "CREATE TABLE otp_verifications (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  identifier VARCHAR(255) NOT NULL,\n  identifier_type VARCHAR(20) CHECK (identifier_type IN ('email', 'phone')),\n  otp_hash VARCHAR(255) NOT NULL,\n  purpose VARCHAR(50) CHECK (purpose IN ('signup', 'login', 'password_reset', 'phone_verify')),\n  attempts INTEGER DEFAULT 0,\n  verified BOOLEAN DEFAULT FALSE,\n  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_otp_identifier ON otp_verifications(identifier);\nCREATE INDEX idx_otp_expires ON otp_verifications(expires_at);"
+      },
+      {
+        "name": "admin_users",
+        "ddl": "CREATE TABLE admin_users (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  email VARCHAR(255) UNIQUE NOT NULL,\n  password_hash VARCHAR(255) NOT NULL,\n  name VARCHAR(255) NOT NULL,\n  role VARCHAR(50) NOT NULL CHECK (role IN ('moderator', 'trust_and_safety', 'super_admin')),\n  is_active BOOLEAN DEFAULT TRUE,\n  last_login_at TIMESTAMP WITH TIME ZONE,\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_admin_email ON admin_users(email);\nCREATE INDEX idx_admin_role ON admin_users(role);"
+      },
+      {
+        "name": "video_calls",
+        "ddl": "CREATE TABLE video_calls (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,\n  caller_id UUID NOT NULL REFERENCES users(id),\n  receiver_id UUID NOT NULL REFERENCES users(id),\n  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'in_progress', 'completed', 'missed')),\n  started_at TIMESTAMP WITH TIME ZONE,\n  ended_at TIMESTAMP WITH TIME ZONE,\n  duration_seconds INTEGER,\n  room_id VARCHAR(255),\n  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()\n);\n\nCREATE INDEX idx_video_calls_match ON video_calls(match_id);\nCREATE INDEX idx_video_calls_caller ON video_calls(caller_id);\nCREATE INDEX idx_video_calls_receiver ON video_calls(receiver_id);\nCREATE INDEX idx_video_calls_status ON video_calls(status);"
+      },
+      {
+        "name": "device_fingerprints",
+        "ddl": "CREATE TABLE device_fingerprints (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  fingerprint_hash VARCHAR(255) NOT NULL,\n  user_id UUID REFERENCES users(id) ON DELETE CASCADE,\n  user_agent TEXT,\n  screen_resolution VARCHAR(50),\n  timezone VARCHAR(50),\n  language VARCHAR(20),\n  platform VARCHAR(100),\n  first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),\n  UNIQUE(fingerprint_hash, user_id)\n);\n\nCREATE INDEX idx_device_fingerprint ON device_fingerprints(fingerprint_hash);\nCREATE INDEX idx_device_user ON device_fingerprints(user_id);"
+      }
+    ]
+  },
+  "api_spec": {
+    "base_url": "https://api.vivahbandhan.com/v1",
+    "authentication": {
+      "type": "Bearer JWT",
+      "header": "Authorization: Bearer <access_token>",
+      "token_expiry": "15 minutes",
+      "refresh_token_expiry": "7 days"
+    },
+    "rate_limiting": {
+      "default": "100 requests per minute",
+      "auth_endpoints": "10 requests per minute",
+      "search_endpoints": "20 requests per minute"
+    },
+    "endpoints": [
+      {
+        "group": "Authentication",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/auth/register",
+            "auth_required": false,
+            "description": "Register new user",
+            "request": {
+              "email": "user@example.com",
+              "phone": "+919876543210",
+              "password": "SecurePass123!",
+              "captcha_token": "recaptcha_token_here"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "user_id": "uuid-here",
+                "email": "user@example.com",
+                "phone": "+919876543210",
+                "email_verification_required": true,
+                "phone_verification_required": true
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/verify-email",
+            "auth_required": false,
+            "description": "Verify email with OTP",
+            "request": {
+              "email": "user@example.com",
+              "otp": "123456"
+            },
+            "response": {
+              "success": true,
+              "message": "Email verified successfully"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/verify-phone",
+            "auth_required": false,
+            "description": "Verify phone with OTP",
+            "request": {
+              "phone": "+919876543210",
+              "otp": "123456"
+            },
+            "response": {
+              "success": true,
+              "message": "Phone verified successfully"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/login",
+            "auth_required": false,
+            "description": "Login user",
+            "request": {
+              "email": "user@example.com",
+              "password": "SecurePass123!",
+              "captcha_token": "recaptcha_token_here",
+              "device_fingerprint": "fingerprint_hash"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "access_token": "jwt_access_token",
+                "refresh_token": "jwt_refresh_token",
+                "expires_in": 900,
+                "user": {
+                  "id": "uuid",
+                  "email": "user@example.com",
+                  "profile_completed": false
+                }
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/refresh",
+            "auth_required": false,
+            "description": "Refresh access token",
+            "request": {
+              "refresh_token": "jwt_refresh_token"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "access_token": "new_jwt_access_token",
+                "expires_in": 900
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/logout",
+            "auth_required": true,
+            "description": "Logout user",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Logged out successfully"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/forgot-password",
+            "auth_required": false,
+            "description": "Request password reset",
+            "request": {
+              "email": "user@example.com",
+              "captcha_token": "recaptcha_token_here"
+            },
+            "response": {
+              "success": true,
+              "message": "Password reset email sent"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/auth/reset-password",
+            "auth_required": false,
+            "description": "Reset password with token",
+            "request": {
+              "token": "reset_token_from_email",
+              "new_password": "NewSecurePass123!"
+            },
+            "response": {
+              "success": true,
+              "message": "Password reset successfully"
+            }
+          }
+        ]
+      },
+      {
+        "group": "Profile",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/profile",
+            "auth_required": true,
+            "description": "Get current user profile",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "id": "uuid",
+                "user_id": "uuid",
+                "name": "Rahul Sharma",
+                "gender": "male",
+                "date_of_birth": "1990-05-15",
+                "age": 34,
+                "height_cm": 175,
+                "religion": "Hindu",
+                "caste": "Brahmin",
+                "caste_consent": true,
+                "caste_consent_at": "2024-01-15T10:30:00Z",
+                "sub_caste": "Iyer",
+                "education": "B.Tech, MBA",
+                "occupation": "Software Engineer",
+                "income_range": "15-20 LPA",
+                "location_city": "Bangalore",
+                "location_state": "Karnataka",
+                "marital_status": "never_married",
+                "diet": "vegetarian",
+                "smoking": "never",
+                "drinking": "occasionally",
+                "languages": [
+                  "Hindi",
+                  "English",
+                  "Tamil"
+                ],
+                "about_me": "Working professional looking for a life partner...",
+                "profile_completion_percentage": 85,
+                "verification_level": 2,
+                "is_verified": true,
+                "photos": [
+                  {
+                    "id": "uuid",
+                    "cdn_url": "https://cdn.vivahbandhan.com/photos/abc123.jpg",
+                    "is_primary": true,
+                    "is_verified": true
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/profile",
+            "auth_required": true,
+            "description": "Create user profile",
+            "request": {
+              "name": "Rahul Sharma",
+              "gender": "male",
+              "date_of_birth": "1990-05-15",
+              "height_cm": 175,
+              "religion": "Hindu",
+              "caste": "Brahmin",
+              "caste_consent": true,
+              "sub_caste": "Iyer",
+              "education": "B.Tech, MBA",
+              "occupation": "Software Engineer",
+              "income_range": "15-20 LPA",
+              "location_city": "Bangalore",
+              "location_state": "Karnataka",
+              "location_pincode": "560001",
+              "marital_status": "never_married",
+              "diet": "vegetarian",
+              "smoking": "never",
+              "drinking": "occasionally",
+              "languages": [
+                "Hindi",
+                "English",
+                "Tamil"
+              ],
+              "about_me": "Working professional looking for a life partner..."
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "id": "uuid",
+                "profile_completion_percentage": 65
+              }
+            }
+          },
+          {
+            "method": "PUT",
+            "path": "/profile",
+            "auth_required": true,
+            "description": "Update user profile",
+            "request": {
+              "name": "Rahul Sharma",
+              "height_cm": 176,
+              "about_me": "Updated bio..."
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "profile_completion_percentage": 70
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/profile/caste-consent",
+            "auth_required": true,
+            "description": "Update caste consent",
+            "request": {
+              "caste_consent": true,
+              "consent_text": "I voluntarily provide my caste/community information to improve match relevance. This is optional, visible only as you choose, and can be removed anytime."
+            },
+            "response": {
+              "success": true,
+              "message": "Caste consent updated"
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/profile/caste-consent",
+            "auth_required": true,
+            "description": "Withdraw caste consent",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Caste consent withdrawn, caste information removed"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/profile/photos",
+            "auth_required": true,
+            "description": "Upload profile photo",
+            "request": {
+              "content_type": "multipart/form-data",
+              "file": "binary_image_data"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "photo_id": "uuid",
+                "upload_url": "presigned_s3_url",
+                "cdn_url": "https://cdn.vivahbandhan.com/photos/abc123.jpg"
+              }
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/profile/photos/{photo_id}",
+            "auth_required": true,
+            "description": "Delete profile photo",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Photo deleted"
+            }
+          },
+          {
+            "method": "PUT",
+            "path": "/profile/photos/{photo_id}/primary",
+            "auth_required": true,
+            "description": "Set primary photo",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Primary photo updated"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/profile/{profile_id}",
+            "auth_required": true,
+            "description": "View another user's profile",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "id": "uuid",
+                "name": "Priya Patel",
+                "gender": "female",
+                "age": 28,
+                "height_cm": 160,
+                "religion": "Hindu",
+                "caste": "Patel",
+                "education": "MBBS",
+                "occupation": "Doctor",
+                "location_city": "Mumbai",
+                "location_state": "Maharashtra",
+                "about_me": "Doctor by profession...",
+                "photos": [
+                  {
+                    "id": "uuid",
+                    "cdn_url": "https://cdn.vivahbandhan.com/photos/xyz.jpg",
+                    "is_primary": true
+                  }
+                ],
+                "verification_badges": [
+                  "phone_verified",
+                  "email_verified",
+                  "id_verified"
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/profile/viewers",
+            "auth_required": true,
+            "premium_only": true,
+            "description": "Get list of users who viewed profile",
+            "request": {
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "viewers": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Anita Sharma",
+                    "age": 26,
+                    "city": "Delhi",
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/pqr.jpg",
+                    "viewed_at": "2024-01-15T10:30:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "total": 45
+                }
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/profile/analytics",
+            "auth_required": true,
+            "premium_only": true,
+            "description": "Get profile analytics",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "profile_views": {
+                  "today": 5,
+                  "this_week": 32,
+                  "this_month": 128
+                },
+                "interests_received": {
+                  "today": 2,
+                  "this_week": 15,
+                  "this_month": 45
+                },
+                "search_appearances": {
+                  "today": 12,
+                  "this_week": 78,
+                  "this_month": 312
+                },
+                "response_rate": 75.5
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/profile/boost",
+            "auth_required": true,
+            "premium_only": true,
+            "description": "Boost profile visibility",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "boost_until": "2024-01-16T10:30:00Z",
+                "message": "Profile boosted for 24 hours"
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/profile/export",
+            "auth_required": true,
+            "description": "Export profile data (GDPR compliance)",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "download_url": "https://api.vivahbandhan.com/exports/profile_uuid_timestamp.json",
+                "expires_at": "2024-01-16T10:30:00Z"
+              }
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/profile",
+            "auth_required": true,
+            "description": "Delete account permanently",
+            "request": {
+              "confirmation": "DELETE",
+              "reason": "found_match"
+            },
+            "response": {
+              "success": true,
+              "message": "Account deletion initiated. You have 30 days to recover your account."
+            }
+          }
+        ]
+      },
+      {
+        "group": "Preferences",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/preferences",
+            "auth_required": true,
+            "description": "Get user preferences",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "preferred_age_min": 25,
+                "preferred_age_max": 32,
+                "preferred_height_min": 155,
+                "preferred_height_max": 170,
+                "preferred_religions": [
+                  "Hindu"
+                ],
+                "preferred_castes": [
+                  "Brahmin",
+                  "Kshatriya"
+                ],
+                "preferred_educations": [
+                  "Graduate",
+                  "Post Graduate",
+                  "Professional"
+                ],
+                "preferred_occupations": [
+                  "Doctor",
+                  "Engineer",
+                  "CA",
+                  "Teacher"
+                ],
+                "preferred_locations": [
+                  "Mumbai",
+                  "Delhi",
+                  "Bangalore"
+                ],
+                "preferred_marital_status": [
+                  "never_married"
+                ],
+                "preferred_diet": [
+                  "vegetarian"
+                ],
+                "preferred_smoking": [
+                  "never"
+                ],
+                "preferred_drinking": [
+                  "never",
+                  "occasionally"
+                ],
+                "preferred_languages": [
+                  "Hindi",
+                  "English"
+                ],
+                "preferred_income_min": 1000000,
+                "max_distance_km": 100
+              }
+            }
+          },
+          {
+            "method": "PUT",
+            "path": "/preferences",
+            "auth_required": true,
+            "description": "Update user preferences",
+            "request": {
+              "preferred_age_min": 26,
+              "preferred_age_max": 34,
+              "preferred_religions": [
+                "Hindu",
+                "Jain"
+              ],
+              "preferred_locations": [
+                "Mumbai",
+                "Pune",
+                "Bangalore"
+              ]
+            },
+            "response": {
+              "success": true,
+              "message": "Preferences updated successfully"
+            }
+          }
+        ]
+      },
+      {
+        "group": "Search",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/search",
+            "auth_required": true,
+            "description": "Search profiles",
+            "request": {
+              "age_min": 25,
+              "age_max": 32,
+              "gender": "female",
+              "religions": [
+                "Hindu"
+              ],
+              "castes": [
+                "Brahmin"
+              ],
+              "educations": [
+                "Graduate",
+                "Post Graduate"
+              ],
+              "occupations": [
+                "Doctor",
+                "Engineer"
+              ],
+              "locations": [
+                "Mumbai",
+                "Bangalore"
+              ],
+              "marital_status": [
+                "never_married"
+              ],
+              "diet": [
+                "vegetarian"
+              ],
+              "height_min": 155,
+              "height_max": 170,
+              "income_min": "10-15 LPA",
+              "distance_km": 50,
+              "sort_by": "relevance",
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "results": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Priya Sharma",
+                    "age": 28,
+                    "height_cm": 162,
+                    "education": "MBBS",
+                    "occupation": "Doctor",
+                    "location_city": "Mumbai",
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/abc.jpg",
+                    "compatibility_score": 92,
+                    "verification_badges": [
+                      "phone_verified",
+                      "email_verified"
+                    ],
+                    "is_premium": false
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "total": 156,
+                  "total_pages": 8
+                },
+                "search_quota": {
+                  "used_today": 5,
+                  "limit": 20
+                }
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/search/saved",
+            "auth_required": true,
+            "description": "Get saved searches",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "saved_searches": [
+                  {
+                    "id": "uuid",
+                    "name": "Brahmin Doctors Mumbai",
+                    "filters": {
+                      "religions": [
+                        "Hindu"
+                      ],
+                      "castes": [
+                        "Brahmin"
+                      ],
+                      "occupations": [
+                        "Doctor"
+                      ],
+                      "locations": [
+                        "Mumbai"
+                      ]
+                    },
+                    "created_at": "2024-01-10T10:30:00Z"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/search/saved",
+            "auth_required": true,
+            "description": "Save search",
+            "request": {
+              "name": "Brahmin Doctors Mumbai",
+              "filters": {
+                "religions": [
+                  "Hindu"
+                ],
+                "castes": [
+                  "Brahmin"
+                ],
+                "occupations": [
+                  "Doctor"
+                ],
+                "locations": [
+                  "Mumbai"
+                ]
+              }
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "id": "uuid",
+                "name": "Brahmin Doctors Mumbai"
+              }
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/search/saved/{search_id}",
+            "auth_required": true,
+            "description": "Delete saved search",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Saved search deleted"
+            }
+          }
+        ]
+      },
+      {
+        "group": "Interests",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/interests/send",
+            "auth_required": true,
+            "description": "Send interest to another user",
+            "request": {
+              "receiver_id": "uuid",
+              "message": "I liked your profile. Would like to know more about you."
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "interest_id": "uuid",
+                "status": "pending",
+                "quota_remaining": 4
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/interests/sent",
+            "auth_required": true,
+            "description": "Get sent interests",
+            "request": {
+              "status": "pending",
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "interests": [
+                  {
+                    "id": "uuid",
+                    "receiver": {
+                      "profile_id": "uuid",
+                      "name": "Priya Sharma",
+                      "age": 28,
+                      "city": "Mumbai",
+                      "primary_photo": "https://cdn.vivahbandhan.com/photos/abc.jpg"
+                    },
+                    "status": "pending",
+                    "sent_at": "2024-01-15T10:30:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "total": 15
+                }
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/interests/received",
+            "auth_required": true,
+            "description": "Get received interests",
+            "request": {
+              "status": "pending",
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "interests": [
+                  {
+                    "id": "uuid",
+                    "sender": {
+                      "profile_id": "uuid",
+                      "name": "Rahul Patel",
+                      "age": 30,
+                      "city": "Bangalore",
+                      "primary_photo": "https://cdn.vivahbandhan.com/photos/xyz.jpg"
+                    },
+                    "message": "Hi, I liked your profile...",
+                    "status": "pending",
+                    "received_at": "2024-01-15T09:00:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "total": 25
+                }
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/interests/{interest_id}/accept",
+            "auth_required": true,
+            "description": "Accept interest",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Interest accepted. You can now message each other."
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/interests/{interest_id}/decline",
+            "auth_required": true,
+            "description": "Decline interest",
+            "request": {
+              "reason": "preferences_dont_match"
+            },
+            "response": {
+              "success": true,
+              "message": "Interest declined"
+            }
+          }
+        ]
+      },
+      {
+        "group": "Shortlist",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/shortlist/{profile_id}",
+            "auth_required": true,
+            "description": "Add profile to shortlist",
+            "request": {
+              "notes": "Good match, follow up later"
+            },
+            "response": {
+              "success": true,
+              "message": "Profile shortlisted",
+              "quota_remaining": 49
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/shortlist/{profile_id}",
+            "auth_required": true,
+            "description": "Remove from shortlist",
+            "request": {},
+            "response": {
+              "success": true,
+              "message": "Profile removed from shortlist"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/shortlist",
+            "auth_required": true,
+            "description": "Get shortlisted profiles",
+            "request": {
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "profiles": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Priya Sharma",
+                    "age": 28,
+                    "city": "Mumbai",
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/abc.jpg",
+                    "notes": "Good match",
+                    "shortlisted_at": "2024-01-15T10:30:00Z"
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 20,
+                  "total": 12
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Recommendations",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/recommendations",
+            "auth_required": true,
+            "description": "Get recommended matches",
+            "request": {
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "recommendations": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Anita Sharma",
+                    "age": 27,
+                    "city": "Delhi",
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/pqr.jpg",
+                    "compatibility_score": 95,
+                    "match_reasons": [
+                      "Age match",
+                      "Location preference",
+                      "Education match"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/recommendations/mutual",
+            "auth_required": true,
+            "description": "Get mutual matches",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "mutual_matches": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Neha Patel",
+                    "age": 26,
+                    "city": "Mumbai",
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/lmn.jpg",
+                    "mutual_interests": [
+                      "Music",
+                      "Travel"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/recommendations/nearby",
+            "auth_required": true,
+            "description": "Get nearby profiles",
+            "request": {
+              "distance_km": 50,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "profiles": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "Sneha Reddy",
+                    "age": 25,
+                    "city": "Bangalore",
+                    "distance_km": 12,
+                    "primary_photo": "https://cdn.vivahbandhan.com/photos/rst.jpg"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Messaging",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/messages/conversations",
+            "auth_required": true,
+            "description": "Get all conversations",
+            "request": {
+              "page": 1,
+              "limit": 20
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "conversations": [
+                  {
+                    "match_id": "uuid",
+                    "user": {
+                      "profile_id": "uuid",
+                      "name": "Priya Sharma",
+                      "primary_photo": "https://cdn.vivahbandhan.com/photos/abc.jpg"
+                    },
+                    "last_message": {
+                      "content": "Hi, how are you?",
+                      "sent_at": "2024-01-15T10:30:00Z",
+                      "is_read": true
+                    },
+                    "unread_count": 2
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/messages/conversations/{match_id}",
+            "auth_required": true,
+            "description": "Get conversation messages",
+            "request": {
+              "page": 1,
+              "limit": 50
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "messages": [
+                  {
+                    "id": "uuid",
+                    "sender_id": "uuid",
+                    "content": "Hi, I liked your profile!",
+                    "message_type": "text",
+                    "created_at": "2024-01-15T10:00:00Z",
+                    "is_read": true
+                  },
+                  {
+                    "id": "uuid",
+                    "sender_id": "uuid",
+                    "content": "Thank you! I liked yours too.",
+                    "message_type": "text",
+                    "created_at": "2024-01-15T10:05:00Z",
+                    "is_read": true
+                  }
+                ],
+                "pagination": {
+                  "page": 1,
+                  "limit": 50,
+                  "total": 25
+                }
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/messages/conversations/{match_id}",
+            "auth_required": true,
+            "description": "Send message",
+            "request": {
+              "content": "Would you like to know more about my family background?",
+              "message_type": "text"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "message_id": "uuid",
+                "created_at": "2024-01-15T10:30:00Z"
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/messages/template",
+            "auth_required": true,
+            "description": "Send template message (free tier)",
+            "request": {
+              "match_id": "uuid",
+              "template_id": "interested_in_profile"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "message_id": "uuid",
+                "content": "I am interested in your profile. Would like to connect."
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/messages/templates",
+            "auth_required": true,
+            "description": "Get available message templates",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "templates": [
+                  {
+                    "id": "interested_in_profile",
+                    "content": "I am interested in your profile. Would like to connect."
+                  },
+                  {
+                    "id": "like_to_know_more",
+                    "content": "I would like to know more about you and your family."
+                  },
+                  {
+                    "id": "similar_interests",
+                    "content": "We have similar interests. Let's explore further."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Video Calls",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/video-calls/initiate",
+            "auth_required": true,
+            "description": "Initiate video call",
+            "request": {
+              "match_id": "uuid"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "call_id": "uuid",
+                "room_id": "webrtc_room_id",
+                "jwt_token": "webrtc_jwt_token",
+                "status": "pending"
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/video-calls/{call_id}/accept",
+            "auth_required": true,
+            "description": "Accept video call",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "room_id": "webrtc_room_id",
+                "jwt_token": "webrtc_jwt_token"
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/video-calls/{call_id}/end",
+            "auth_required": true,
+            "description": "End video call",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "duration_seconds": 300
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Verification",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/verification/phone",
+            "auth_required": true,
+            "description": "Request phone verification OTP",
+            "request": {
+              "phone": "+919876543210"
+            },
+            "response": {
+              "success": true,
+              "message": "OTP sent to your phone"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/verification/phone/verify",
+            "auth_required": true,
+            "description": "Verify phone with OTP",
+            "request": {
+              "otp": "123456"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "verified": true,
+                "badge_added": true
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/verification/government-id",
+            "auth_required": true,
+            "description": "Submit government ID for verification",
+            "request": {
+              "document_type": "aadhaar",
+              "document_number": "XXXX-XXXX-1234",
+              "document_photo": "base64_or_file_upload"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "verification_id": "uuid",
+                "status": "submitted",
+                "estimated_review_time": "24-48 hours"
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/verification/video",
+            "auth_required": true,
+            "description": "Submit video verification",
+            "request": {
+              "video_url": "s3_url_or_upload"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "verification_id": "uuid",
+                "status": "submitted"
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/verification/status",
+            "auth_required": true,
+            "description": "Get verification status",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "email_verified": true,
+                "phone_verified": true,
+                "government_id_verified": true,
+                "video_verified": false,
+                "verification_level": 3,
+                "badges": [
+                  "email_verified",
+                  "phone_verified",
+                  "id_verified"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Reports",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/reports",
+            "auth_required": true,
+            "description": "Report a user",
+            "request": {
+              "reported_user_id": "uuid",
+              "report_type": "fake_profile",
+              "description": "This profile seems to be using fake photos"
+            },
+            "response": {
+              "success": true,
+              "message": "Report submitted successfully. Our team will review it."
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/reports/my-reports",
+            "auth_required": true,
+            "description": "Get user's submitted reports",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "reports": [
+                  {
+                    "id": "uuid",
+                    "reported_user_name": "Fake User",
+                    "report_type": "fake_profile",
+                    "status": "under_review",
+                    "created_at": "2024-01-15T10:30:00Z"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Astrology",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/astrology/enable",
+            "auth_required": true,
+            "description": "Enable astrology matching",
+            "request": {
+              "date_of_birth": "1990-05-15",
+              "time_of_birth": "10:30",
+              "place_of_birth": "Mumbai"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "enabled": true,
+                "kundali_generated": true
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/astrology/compatibility/{profile_id}",
+            "auth_required": true,
+            "description": "Get astro compatibility with another profile",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "compatibility_score": 85,
+                "gun_milan_score": 28,
+                "max_gun_milan": 36,
+                "doshas": [
+                  "Manglik"
+                ],
+                "remedies": [
+                  "Perform Kumbh Vivah before marriage"
+                ],
+                "summary": "Good compatibility with minor doshas"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Subscription",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/subscription/plans",
+            "auth_required": true,
+            "description": "Get available subscription plans",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "plans": [
+                  {
+                    "id": "premium_1m",
+                    "name": "Premium 1 Month",
+                    "price": 999,
+                    "currency": "INR",
+                    "duration_days": 30,
+                    "features": [
+                      "Unlimited messaging",
+                      "View contact info",
+                      "Profile boost"
+                    ]
+                  },
+                  {
+                    "id": "premium_3m",
+                    "name": "Premium 3 Months",
+                    "price": 2499,
+                    "currency": "INR",
+                    "duration_days": 90,
+                    "features": [
+                      "All 1 month features",
+                      "Featured listing",
+                      "Advanced filters"
+                    ]
+                  },
+                  {
+                    "id": "premium_12m",
+                    "name": "Premium 12 Months",
+                    "price": 5999,
+                    "currency": "INR",
+                    "duration_days": 365,
+                    "features": [
+                      "All features",
+                      "Priority support",
+                      "Personalized matchmaking"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/subscription/current",
+            "auth_required": true,
+            "description": "Get current subscription status",
+            "request": {},
+            "response": {
+              "success": true,
+              "data": {
+                "plan_type": "free",
+                "status": "active",
+                "features_available": {
+                  "daily_searches": 20,
+                  "daily_interests": 5,
+                  "max_shortlisted": 50
+                },
+                "premium_features_locked": true
+              }
+            }
+          }
+        ]
+      },
+      {
+        "group": "Admin",
+        "endpoints": [
+          {
+            "method": "POST",
+            "path": "/admin/login",
+            "auth_required": false,
+            "description": "Admin login",
+            "request": {
+              "email": "admin@vivahbandhan.com",
+              "password": "AdminPass123!",
+              "captcha_token": "recaptcha_token"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "access_token": "jwt_admin_token",
+                "admin": {
+                  "id": "uuid",
+                  "name": "Admin User",
+                  "role": "super_admin"
+                }
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/admin/profiles/pending-verification",
+            "auth_required": true,
+            "admin_role": [
+              "moderator",
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Get profiles pending verification",
+            "request": {
+              "page": 1,
+              "limit": 50
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "profiles": [
+                  {
+                    "profile_id": "uuid",
+                    "name": "User Name",
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "verification_submitted_at": "2024-01-16T10:30:00Z",
+                    "documents": [
+                      {
+                        "type": "aadhaar",
+                        "url": "s3_url"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/admin/profiles/{profile_id}/verify",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Verify or reject profile",
+            "request": {
+              "action": "approve",
+              "notes": "Documents verified successfully"
+            },
+            "response": {
+              "success": true,
+              "message": "Profile verified"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/admin/photos/pending-moderation",
+            "auth_required": true,
+            "admin_role": [
+              "moderator",
+              "super_admin"
+            ],
+            "description": "Get photos pending moderation",
+            "request": {
+              "page": 1,
+              "limit": 50
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "photos": [
+                  {
+                    "photo_id": "uuid",
+                    "profile_id": "uuid",
+                    "profile_name": "User Name",
+                    "photo_url": "https://cdn.vivahbandhan.com/photos/abc.jpg",
+                    "uploaded_at": "2024-01-15T10:30:00Z",
+                    "auto_moderation_result": {
+                      "nsfw_score": 0.02,
+                      "face_detected": true
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/admin/photos/{photo_id}/moderate",
+            "auth_required": true,
+            "admin_role": [
+              "moderator",
+              "super_admin"
+            ],
+            "description": "Moderate photo",
+            "request": {
+              "action": "approve",
+              "notes": "Photo approved"
+            },
+            "response": {
+              "success": true,
+              "message": "Photo moderated"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/admin/reports",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Get user reports",
+            "request": {
+              "status": "pending",
+              "page": 1,
+              "limit": 50
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "reports": [
+                  {
+                    "id": "uuid",
+                    "reporter_name": "Reporter Name",
+                    "reported_user_name": "Reported User",
+                    "report_type": "fake_profile",
+                    "description": "Using fake photos",
+                    "status": "pending",
+                    "created_at": "2024-01-15T10:30:00Z"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/admin/reports/{report_id}/resolve",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Resolve report",
+            "request": {
+              "action": "ban_user",
+              "admin_notes": "Confirmed fake profile, user banned"
+            },
+            "response": {
+              "success": true,
+              "message": "Report resolved"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/admin/users/{user_id}/ban",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Ban user",
+            "request": {
+              "reason": "Fake profile detected",
+              "duration": "permanent"
+            },
+            "response": {
+              "success": true,
+              "message": "User banned"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/admin/users/{user_id}/suspend",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Suspend user",
+            "request": {
+              "reason": "Under investigation",
+              "duration_days": 7
+            },
+            "response": {
+              "success": true,
+              "message": "User suspended"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/admin/fraud-queue",
+            "auth_required": true,
+            "admin_role": [
+              "trust_and_safety",
+              "super_admin"
+            ],
+            "description": "Get high fraud score users",
+            "request": {
+              "min_score": 70,
+              "page": 1,
+              "limit": 50
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "users": [
+                  {
+                    "user_id": "uuid",
+                    "email": "suspicious@example.com",
+                    "fraud_score": 85,
+                    "risk_level": "high",
+                    "factors": {
+                      "duplicate_device": true,
+                      "ip_velocity": 15,
+                      "photo_similarity": 0.92
+                    },
+                    "created_at": "2024-01-15T10:30:00Z"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/admin/analytics",
+            "auth_required": true,
+            "admin_role": [
+              "super_admin"
+            ],
+            "description": "Get platform analytics",
+            "request": {
+              "date_from": "2024-01-01",
+              "date_to": "2024-01-31"
+            },
+            "response": {
+              "success": true,
+              "data": {
+                "total_users": 50000,
+                "new_registrations": 2500,
+                "premium_subscribers": 5000,
+                "total_matches": 1500,
+                "active_users_today": 8000,
+                "fraud_blocked": 150,
+                "reports_resolved": 200
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "elasticsearch_mapping": {
+    "index_name": "profiles",
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "analysis": {
+        "analyzer": {
+          "name_analyzer": {
+            "type": "custom",
+            "tokenizer": "standard",
+            "filter": [
+              "lowercase",
+              "edge_ngram_filter"
+            ]
+          },
+          "location_analyzer": {
+            "type": "custom",
+            "tokenizer": "standard",
+            "filter": [
+              "lowercase"
+            ]
+          }
+        },
+        "filter": {
+          "edge_ngram_filter": {
+            "type": "edge_ngram",
+            "min_gram": 2,
+            "max_gram": 20
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "profile_id": {
+          "type": "keyword"
+        },
+        "user_id": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "analyzer": "name_analyzer",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "gender": {
+          "type": "keyword"
+        },
+        "age": {
+          "type": "integer"
+        },
+        "date_of_birth": {
+          "type": "date"
+        },
+        "height_cm": {
+          "type": "integer"
+        },
+        "religion": {
+          "type": "keyword"
+        },
+        "caste": {
+          "type": "keyword"
+        },
+        "caste_consent": {
+          "type": "boolean"
+        },
+        "sub_caste": {
+          "type": "keyword"
+        },
+        "education": {
+          "type": "keyword"
+        },
+        "occupation": {
+          "type": "keyword"
+        },
+        "income_range": {
+          "type": "keyword"
+        },
+        "income_value": {
+          "type": "integer"
+        },
+        "location_city": {
+          "type": "text",
+          "analyzer": "location_analyzer",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "location_state": {
+          "type": "keyword"
+        },
+        "location_country": {
+          "type": "keyword"
+        },
+        "location_pincode": {
+          "type": "keyword"
+        },
+        "geo_location": {
+          "type": "geo_point"
+        },
+        "marital_status": {
+          "type": "keyword"
+        },
+        "diet": {
+          "type": "keyword"
+        },
+        "smoking": {
+          "type": "keyword"
+        },
+        "drinking": {
+          "type": "keyword"
+        },
+        "languages": {
+          "type": "keyword"
+        },
+        "about_me": {
+          "type": "text"
+        },
+        "is_verified": {
+          "type": "boolean"
+        },
+        "verification_level": {
+          "type": "integer"
+        },
+        "verification_badges": {
+          "type": "keyword"
+        },
+        "is_premium": {
+          "type": "boolean"
+        },
+        "is_featured": {
+          "type": "boolean"
+        },
+        "is_boosted": {
+          "type": "boolean"
+        },
+        "profile_completion": {
+          "type": "integer"
+        },
+        "last_active_at": {
+          "type": "date"
+        },
+        "created_at": {
+          "type": "date"
+        },
+        "primary_photo_url": {
+          "type": "keyword",
+          "index": false
+        },
+        "compatibility_boost": {
+          "type": "float"
+        },
+        "fraud_score": {
+          "type": "float"
+        },
+        "is_banned": {
+          "type": "boolean"
+        },
+        "is_active": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "redux_state_shape": {
+    "store": {
+      "auth": {
+        "user": "null | User",
+        "accessToken": "string | null",
+        "refreshToken": "string | null",
+        "isAuthenticated": "boolean",
+        "loading": "boolean",
+        "error": "string | null"
+      },
+      "profile": {
+        "currentProfile": "Profile | null",
+        "profileCompletion": "number",
+        "photos": "Photo[]",
+        "preferences": "Preferences | null",
+        "loading": "boolean",
+        "error": "string | null"
+      },
+      "search": {
+        "results": "ProfileSearchResult[]",
+        "totalResults": "number",
+        "currentPage": "number",
+        "filters": "SearchFilters",
+        "savedSearches": "SavedSearch[]",
+        "quotaUsed": "number",
+        "quotaLimit": "number",
+        "loading": "boolean"
+      },
+      "interests": {
+        "sent": "Interest[]",
+        "received": "Interest[]",
+        "sentPagination": "Pagination",
+        "receivedPagination": "Pagination",
+        "quotaRemaining": "number"
+      },
+      "shortlist": {
+        "profiles": "ShortlistedProfile[]",
+        "pagination": "Pagination",
+        "total": "number"
+      },
+      "recommendations": {
+        "dailyMatches": "RecommendedProfile[]",
+        "mutualMatches": "RecommendedProfile[]",
+        "nearbyProfiles": "RecommendedProfile[]",
+        "loading": "boolean"
+      },
+      "messages": {
+        "conversations": "Conversation[]",
+        "currentConversation": "Conversation | null",
+        "messages": "Message[]",
+        "unreadCount": "number",
+        "templates": "MessageTemplate[]",
+        "websocketConnected": "boolean"
+      },
+      "videoCalls": {
+        "activeCall": "VideoCall | null",
+        "callHistory": "VideoCall[]",
+        "localStream": "MediaStream | null",
+        "remoteStream": "MediaStream | null"
+      },
+      "verifications": {
+        "status": "VerificationStatus",
+        "pendingVerifications": "Verification[]",
+        "badges": "VerificationBadge[]"
+      },
+      "subscriptions": {
+        "currentPlan": "Subscription | null",
+        "availablePlans": "Plan[]",
+        "features": "PlanFeatures"
+      },
+      "notifications": {
+        "items": "Notification[]",
+        "unreadCount": "number"
+      },
+      "ui": {
+        "theme": "light | dark",
+        "language": "string",
+        "sidebarOpen": "boolean",
+        "modalOpen": "string | null"
+      }
+    },
+    "types": {
+      "User": {
+        "id": "string",
+        "email": "string",
+        "phone": "string",
+        "emailVerified": "boolean",
+        "phoneVerified": "boolean",
+        "createdAt": "string"
+      },
+      "Profile": {
+        "id": "string",
+        "userId": "string",
+        "name": "string",
+        "gender": "male | female | other",
+        "dateOfBirth": "string",
+        "age": "number",
+        "heightCm": "number",
+        "religion": "string",
+        "caste": "string",
+        "casteConsent": "boolean",
+        "casteConsentAt": "string",
+        "subCaste": "string",
+        "education": "string",
+        "occupation": "string",
+        "incomeRange": "string",
+        "locationCity": "string",
+        "locationState": "string",
+        "maritalStatus": "string",
+        "diet": "string",
+        "smoking": "string",
+        "drinking": "string",
+        "languages": "string[]",
+        "aboutMe": "string",
+        "profileCompletionPercentage": "number",
+        "verificationLevel": "number",
+        "isVerified": "boolean",
+        "isPremium": "boolean"
+      },
+      "Photo": {
+        "id": "string",
+        "cdnUrl": "string",
+        "isPrimary": "boolean",
+        "isVerified": "boolean",
+        "moderationStatus": "pending | approved | rejected"
+      },
+      "SearchFilters": {
+        "ageMin": "number",
+        "ageMax": "number",
+        "gender": "string",
+        "religions": "string[]",
+        "castes": "string[]",
+        "educations": "string[]",
+        "occupations": "string[]",
+        "locations": "string[]",
+        "maritalStatus": "string[]",
+        "diet": "string[]",
+        "heightMin": "number",
+        "heightMax": "number",
+        "incomeMin": "string",
+        "distanceKm": "number",
+        "sortBy": "relevance | recent | age_asc | age_desc"
+      },
+      "Interest": {
+        "id": "string",
+        "senderId": "string",
+        "receiverId": "string",
+        "status": "pending | accepted | declined | blocked",
+        "message": "string",
+        "createdAt": "string"
+      },
+      "Message": {
+        "id": "string",
+        "senderId": "string",
+        "receiverId": "string",
+        "matchId": "string",
+        "content": "string",
+        "messageType": "text | template | image | video_call_request",
+        "isRead": "boolean",
+        "createdAt": "string"
+      },
+      "Conversation": {
+        "matchId": "string",
+        "user": "ProfileSummary",
+        "lastMessage": "Message",
+        "unreadCount": "number"
+      }
+    }
+  },
+  "react_component_map": {
+    "pages": {
+      "LandingPage": {
+        "path": "/",
+        "components": [
+          "Header",
+          "HeroSection",
+          "FeaturesSection",
+          "TestimonialsSection",
+          "HowItWorksSection",
+          "Footer"
+        ]
+      },
+      "LoginPage": {
+        "path": "/login",
+        "components": [
+          "Header",
+          "LoginForm",
+          "SocialLogin",
+          "Footer"
+        ]
+      },
+      "RegisterPage": {
+        "path": "/register",
+        "components": [
+          "Header",
+          "RegistrationForm",
+          "CaptchaWidget",
+          "Footer"
+        ]
+      },
+      "ProfileSetupPage": {
+        "path": "/profile/setup",
+        "components": [
+          "ProfileSetupWizard",
+          "PhotoUploader",
+          "CasteConsentModal"
+        ]
+      },
+      "DashboardPage": {
+        "path": "/dashboard",
+        "components": [
+          "Sidebar",
+          "ProfileSummaryCard",
+          "RecommendationsCarousel",
+          "RecentInterests",
+          "ProfileCompletionBanner",
+          "UpgradePrompt"
+        ]
+      },
+      "SearchPage": {
+        "path": "/search",
+        "components": [
+          "Sidebar",
+          "SearchFiltersPanel",
+          "SearchResultsGrid",
+          "SearchPagination",
+          "SaveSearchModal",
+          "SearchQuotaIndicator"
+        ]
+      },
+      "ProfileViewPage": {
+        "path": "/profile/:id",
+        "components": [
+          "Sidebar",
+          "ProfileHeader",
+          "PhotoGallery",
+          "ProfileDetails",
+          "InterestButtons",
+          "ShortlistButton",
+          "ReportButton",
+          "AstroCompatibilityCard"
+        ]
+      },
+      "InterestsPage": {
+        "path": "/interests",
+        "components": [
+          "Sidebar",
+          "InterestsTabs",
+          "SentInterestsList",
+          "ReceivedInterestsList"
+        ]
+      },
+      "ShortlistPage": {
+        "path": "/shortlist",
+        "components": [
+          "Sidebar",
+          "ShortlistedProfilesGrid",
+          "ShortlistQuotaIndicator"
+        ]
+      },
+      "MessagesPage": {
+        "path": "/messages",
+        "components": [
+          "Sidebar",
+          "ConversationsList",
+          "ChatWindow",
+          "MessageInput",
+          "TemplateMessagesDropdown",
+          "TypingIndicator"
+        ]
+      },
+      "VideoCallPage": {
+        "path": "/video-call/:callId",
+        "components": [
+          "VideoCallContainer",
+          "LocalVideo",
+          "RemoteVideo",
+          "CallControls",
+          "CallTimer"
+        ]
+      },
+      "SettingsPage": {
+        "path": "/settings",
+        "components": [
+          "Sidebar",
+          "SettingsNavigation",
+          "AccountSettings",
+          "PrivacySettings",
+          "NotificationSettings",
+          "VerificationSettings"
+        ]
+      },
+      "SubscriptionPage": {
+        "path": "/subscription",
+        "components": [
+          "Sidebar",
+          "CurrentPlanCard",
+          "AvailablePlansGrid",
+          "PlanComparisonTable",
+          "PaymentForm"
+        ]
+      },
+      "VerificationPage": {
+        "path": "/verification",
+        "components": [
+          "Sidebar",
+          "VerificationProgress",
+          "PhoneVerificationForm",
+          "IdVerificationForm",
+          "VideoVerificationForm",
+          "VerificationBadges"
+        ]
+      }
+    },
+    "shared_components": {
+      "Header": {
+        "props": "isAuthenticated, user, onLogout",
+        "children": [
+          "Logo",
+          "NavigationMenu",
+          "UserDropdown",
+          "NotificationBell"
+        ]
+      },
+      "Sidebar": {
+        "props": "collapsed, onItemClick",
+        "children": [
+          "SidebarItem[]",
+          "UpgradeButton"
+        ]
+      },
+      "ProfileCard": {
+        "props": "profile, onViewProfile, onSendInterest, onShortlist",
+        "children": [
+          "ProfilePhoto",
+          "ProfileBasicInfo",
+          "CompatibilityScore",
+          "VerificationBadges"
+        ]
+      },
+      "SearchFiltersPanel": {
+        "props": "filters, onFilterChange, onReset",
+        "children": [
+          "AgeRangeSlider",
+          "LocationSelect",
+          "ReligionSelect",
+          "CasteSelect",
+          "EducationSelect",
+          "OccupationSelect",
+          "MoreFiltersAccordion"
+        ]
+      },
+      "PhotoUploader": {
+        "props": "onUpload, maxPhotos, primaryPhotoId",
+        "children": [
+          "Dropzone",
+          "PhotoPreview[]",
+          "UploadProgress"
+        ]
+      },
+      "CasteConsentModal": {
+        "props": "isOpen, onAccept, onDecline, onSkip",
+        "children": [
+          "ConsentText",
+          "AcceptButton",
+          "DeclineButton",
+          "SkipButton"
+        ]
+      },
+      "InterestModal": {
+        "props": "isOpen, profileId, onSend, onClose",
+        "children": [
+          "ProfilePreview",
+          "MessageTextarea",
+          "SendButton"
+        ]
+      },
+      "ReportModal": {
+        "props": "isOpen, profileId, onSubmit, onClose",
+        "children": [
+          "ReportTypeSelect",
+          "DescriptionTextarea",
+          "SubmitButton"
+        ]
+      },
+      "VerificationBadge": {
+        "props": "type, verified",
+        "types": [
+          "email",
+          "phone",
+          "id",
+          "video"
+        ]
+      },
+      "CompatibilityMeter": {
+        "props": "score, showBreakdown",
+        "children": [
+          "ScoreCircle",
+          "BreakdownChart"
+        ]
+      },
+      "AstroCompatibilityCard": {
+        "props": "profileId, compatibilityData",
+        "children": [
+          "GunMilanScore",
+          "DoshaWarnings",
+          "RemediesSection"
+        ]
+      },
+      "MessageInput": {
+        "props": "onSend, isPremium, remainingQuota",
+        "children": [
+          "Textarea",
+          "EmojiPicker",
+          "AttachmentButton",
+          "SendButton",
+          "TemplateButton"
+        ]
+      },
+      "VideoCallContainer": {
+        "props": "callId, onEnd, onToggleCamera, onToggleMic",
+        "children": [
+          "LocalVideo",
+          "RemoteVideo",
+          "CallControls"
+        ]
+      }
+    },
+    "admin_components": {
+      "AdminDashboardPage": {
+        "path": "/admin",
+        "components": [
+          "AdminSidebar",
+          "StatsCards",
+          "RecentActivityFeed",
+          "PendingVerificationsWidget",
+          "FraudAlertsWidget"
+        ]
+      },
+      "AdminVerificationsPage": {
+        "path": "/admin/verifications",
+        "components": [
+          "AdminSidebar",
+          "VerificationQueueList",
+          "VerificationDetailModal",
+          "ApproveRejectActions"
+        ]
+      },
+      "AdminPhotosPage": {
+        "path": "/admin/photos",
+        "components": [
+          "AdminSidebar",
+          "PhotoModerationQueue",
+          "PhotoPreviewModal",
+          "ApproveRejectActions"
+        ]
+      },
+      "AdminReportsPage": {
+        "path": "/admin/reports",
+        "components": [
+          "AdminSidebar",
+          "ReportsList",
+          "ReportDetailModal",
+          "ActionButtons"
+        ]
+      },
+      "AdminUsersPage": {
+        "path": "/admin/users",
+        "components": [
+          "AdminSidebar",
+          "UsersTable",
+          "UserSearchFilter",
+          "UserDetailModal",
+          "BanSuspendActions"
+        ]
+      },
+      "AdminFraudPage": {
+        "path": "/admin/fraud",
+        "components": [
+          "AdminSidebar",
+          "FraudScoreList",
+          "FraudDetailModal",
+          "RiskLevelFilter"
+        ]
+      },
+      "AdminAnalyticsPage": {
+        "path": "/admin/analytics",
+        "components": [
+          "AdminSidebar",
+          "DateRangePicker",
+          "MetricsCards",
+          "ChartsGrid"
+        ]
+      }
+    }
+  },
+  "admin_dashboard_spec": {
+    "roles": {
+      "moderator": {
+        "permissions": [
+          "view_profiles",
+          "moderate_photos",
+          "view_reports"
+        ]
+      },
+      "trust_and_safety": {
+        "permissions": [
+          "view_profiles",
+          "moderate_photos",
+          "view_reports",
+          "verify_profiles",
+          "ban_users",
+          "view_fraud_queue",
+          "resolve_reports"
+        ]
+      },
+      "super_admin": {
+        "permissions": [
+          "all_permissions",
+          "manage_admin_users",
+          "view_analytics",
+          "system_settings"
+        ]
+      }
+    },
+    "dashboard_widgets": [
+      {
+        "name": "Stats Overview",
+        "metrics": [
+          "total_users",
+          "new_registrations_today",
+          "active_users_today",
+          "premium_subscribers",
+          "pending_verifications",
+          "pending_reports"
+        ]
+      },
+      {
+        "name": "Recent Activity Feed",
+        "events": [
+          "user_registration",
+          "profile_verification",
+          "user_banned",
+          "report_resolved",
+          "payment_received"
+        ]
+      },
+      {
+        "name": "Verification Queue",
+        "columns": [
+          "profile_name",
+          "submitted_at",
+          "document_type",
+          "actions"
+        ],
+        "actions": [
+          "view",
+          "approve",
+          "reject",
+          "request_more_info"
+        ]
+      },
+      {
+        "name": "Photo Moderation Queue",
+        "columns": [
+          "profile_name",
+          "photo_preview",
+          "uploaded_at",
+          "auto_check_result",
+          "actions"
+        ],
+        "actions": [
+          "approve",
+          "reject",
+          "flag_for_review"
+        ]
+      },
+      {
+        "name": "Fraud Alerts",
+        "columns": [
+          "user_email",
+          "fraud_score",
+          "risk_factors",
+          "created_at",
+          "actions"
+        ],
+        "actions": [
+          "view_details",
+          "ban_user",
+          "mark_false_positive",
+          "request_verification"
+        ]
+      },
+      {
+        "name": "Reports Queue",
+        "columns": [
+          "reporter",
+          "reported_user",
+          "report_type",
+          "created_at",
+          "actions"
+        ],
+        "actions": [
+          "view_details",
+          "ban_reported",
+          "dismiss",
+          "warn_user"
+        ]
+      }
+    ],
+    "analytics_charts": [
+      {
+        "name": "User Growth",
+        "type": "line_chart",
+        "metrics": [
+          "registrations",
+          "active_users"
+        ],
+        "dimensions": [
+          "day",
+          "week",
+          "month"
+        ]
+      },
+      {
+        "name": "Revenue Trends",
+        "type": "area_chart",
+        "metrics": [
+          "total_revenue",
+          "new_subscriptions",
+          "churn_rate"
+        ]
+      },
+      {
+        "name": "Engagement Metrics",
+        "type": "bar_chart",
+        "metrics": [
+          "profile_views",
+          "interests_sent",
+          "messages_sent",
+          "matches_made"
+        ]
+      },
+      {
+        "name": "Geographic Distribution",
+        "type": "map_chart",
+        "metrics": [
+          "users_by_state",
+          "users_by_city"
+        ]
+      },
+      {
+        "name": "Fraud Prevention",
+        "type": "pie_chart",
+        "metrics": [
+          "blocked_accounts",
+          "suspicious_activity",
+          "resolved_reports"
+        ]
+      }
+    ]
+  },
+  "moderation_flow": {
+    "photo_moderation": {
+      "trigger": "Photo uploaded",
+      "steps": [
+        {
+          "step": 1,
+          "name": "Auto NSFW Detection",
+          "action": "Call NSFW detection API",
+          "threshold": "nsfw_score < 0.1",
+          "on_pass": "Proceed to face detection",
+          "on_fail": "Auto-reject or flag for manual review"
+        },
+        {
+          "step": 2,
+          "name": "Face Detection",
+          "action": "Detect face in photo",
+          "on_pass": "Proceed to deepfake check",
+          "on_fail": "Flag for manual review"
+        },
+        {
+          "step": 3,
+          "name": "Deepfake Detection",
+          "action": "Check for AI-generated face",
+          "on_pass": "Auto-approve",
+          "on_fail": "Flag for manual review"
+        },
+        {
+          "step": 4,
+          "name": "Manual Review",
+          "action": "Admin reviews flagged photos",
+          "options": [
+            "approve",
+            "reject",
+            "request_new_photo"
+          ]
+        }
+      ]
+    },
+    "profile_verification": {
+      "trigger": "User submits ID document",
+      "steps": [
+        {
+          "step": 1,
+          "name": "Document Validation",
+          "action": "Check document format and completeness",
+          "on_pass": "Proceed to OCR",
+          "on_fail": "Request resubmission"
+        },
+        {
+          "step": 2,
+          "name": "OCR Extraction",
+          "action": "Extract details from document",
+          "fields": [
+            "name",
+            "dob",
+            "address",
+            "document_number"
+          ]
+        },
+        {
+          "step": 3,
+          "name": "Details Matching",
+          "action": "Match extracted details with profile",
+          "threshold": "name_similarity > 0.8, dob_match = true",
+          "on_pass": "Proceed to face match",
+          "on_fail": "Flag for manual review"
+        },
+        {
+          "step": 4,
+          "name": "Face Match",
+          "action": "Match document photo with profile photos",
+          "threshold": "face_similarity > 0.85",
+          "on_pass": "Auto-approve",
+          "on_fail": "Flag for manual review"
+        },
+        {
+          "step": 5,
+          "name": "Manual Verification",
+          "action": "Admin reviews flagged verifications",
+          "options": [
+            "approve",
+            "reject",
+            "request_additional_doc"
+          ]
+        }
+      ]
+    },
+    "report_handling": {
+      "trigger": "User reports another user",
+      "steps": [
+        {
+          "step": 1,
+          "name": "Auto Assessment",
+          "action": "Check reported user's fraud score and history",
+          "conditions": [
+            "fraud_score > 80 -> Auto-suspend",
+            "multiple_reports_24h -> Priority queue"
+          ]
+        },
+        {
+          "step": 2,
+          "name": "Evidence Collection",
+          "action": "Gather relevant data",
+          "data": [
+            "reported_user_profile",
+            "reporter_profile",
+            "interaction_history",
+            "messages"
+          ]
+        },
+        {
+          "step": 3,
+          "name": "Manual Review",
+          "action": "Trust & Safety admin reviews",
+          "options": [
+            "dismiss",
+            "warn_user",
+            "suspend_user",
+            "ban_user",
+            "request_more_info"
+          ]
+        },
+        {
+          "step": 4,
+          "name": "Action & Notification",
+          "action": "Execute decision and notify parties",
+          "notifications": [
+            "reporter: report_resolved",
+            "reported: warning/ban_notification"
+          ]
+        }
+      ]
+    }
+  },
+  "fraud_detection_design": {
+    "scoring_factors": [
+      {
+        "factor": "duplicate_device",
+        "weight": 0.15,
+        "description": "Multiple accounts from same device",
+        "detection": "Device fingerprint matching"
+      },
+      {
+        "factor": "ip_velocity",
+        "weight": 0.12,
+        "description": "Multiple registrations from same IP",
+        "detection": "IP velocity check",
+        "threshold": "> 5 accounts per IP per day"
+      },
+      {
+        "factor": "photo_similarity",
+        "weight": 0.15,
+        "description": "Photos match known fake profiles or stock images",
+        "detection": "Reverse image search, perceptual hashing"
+      },
+      {
+        "factor": "email_domain_risk",
+        "weight": 0.08,
+        "description": "Temporary or disposable email domains",
+        "detection": "Email domain blacklist check"
+      },
+      {
+        "factor": "phone_risk",
+        "weight": 0.10,
+        "description": "VOIP or virtual phone numbers",
+        "detection": "Phone number type lookup"
+      },
+      {
+        "factor": "behavioral_pattern",
+        "weight": 0.12,
+        "description": "Suspicious activity patterns",
+        "patterns": [
+          "rapid_profile_completion",
+          "mass_interest_sending",
+          "copy_paste_messages"
+        ]
+      },
+      {
+        "factor": "profile_inconsistency",
+        "weight": 0.10,
+        "description": "Contradictory profile information",
+        "examples": [
+          "age vs education year",
+          "income vs occupation"
+        ]
+      },
+      {
+        "factor": "location_mismatch",
+        "weight": 0.08,
+        "description": "IP location doesn't match profile location",
+        "threshold": "> 500km distance"
+      },
+      {
+        "factor": "verification_evasion",
+        "weight": 0.10,
+        "description": "Multiple failed verification attempts",
+        "threshold": "> 3 failed attempts"
+      }
+    ],
+    "risk_levels": {
+      "low": {
+        "range": "0-30",
+        "action": "Allow normal access"
+      },
+      "medium": {
+        "range": "31-60",
+        "action": "Require additional verification, limit features"
+      },
+      "high": {
+        "range": "61-80",
+        "action": "Suspend pending review, require government ID"
+      },
+      "critical": {
+        "range": "81-100",
+        "action": "Auto-ban, add to blacklist"
+      }
+    },
+    "detection_pipeline": {
+      "real_time_checks": [
+        "device_fingerprint",
+        "ip_check",
+        "email_domain",
+        "phone_type"
+      ],
+      "async_checks": [
+        "photo_similarity",
+        "behavioral_analysis",
+        "historical_patterns"
+      ],
+      "update_frequency": "On every user action"
+    }
+  },
+  "astro_service_spec": {
+    "service_name": "astro_service",
+    "description": "Microservice for astrological compatibility matching",
+    "base_url": "http://astro-service:8001",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/kundali/generate",
+        "description": "Generate kundali for a user",
+        "request": {
+          "user_id": "uuid",
+          "date_of_birth": "1990-05-15",
+          "time_of_birth": "10:30",
+          "place_of_birth": "Mumbai",
+          "latitude": 19.076,
+          "longitude": 72.8777,
+          "timezone": "Asia/Kolkata"
+        },
+        "response": {
+          "kundali_id": "uuid",
+          "rashi": "Vrishabha",
+          "nakshatra": "Rohini",
+          "lagna": "Kanya",
+          "moon_sign": "Vrishabha",
+          "sun_sign": "Vrishabha",
+          "manglik": false,
+          "planetary_positions": {}
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/compatibility/calculate",
+        "description": "Calculate compatibility between two kundalis",
+        "request": {
+          "kundali_id_1": "uuid",
+          "kundali_id_2": "uuid"
+        },
+        "response": {
+          "compatibility_id": "uuid",
+          "gun_milan_score": 28,
+          "max_score": 36,
+          "compatibility_percentage": 77.78,
+          "verdict": "recommended",
+          "guna_details": [
+            {
+              "name": "Varna",
+              "score": 1,
+              "max": 1
+            },
+            {
+              "name": "Vashya",
+              "score": 2,
+              "max": 2
+            },
+            {
+              "name": "Tara",
+              "score": 3,
+              "max": 3
+            },
+            {
+              "name": "Yoni",
+              "score": 4,
+              "max": 4
+            },
+            {
+              "name": "Graha Maitri",
+              "score": 5,
+              "max": 5
+            },
+            {
+              "name": "Gana",
+              "score": 6,
+              "max": 6
+            },
+            {
+              "name": "Bhakoot",
+              "score": 7,
+              "max": 7
+            },
+            {
+              "name": "Nadi",
+              "score": 0,
+              "max": 8
+            }
+          ],
+          "doshas": [
+            {
+              "type": "Nadi Dosha",
+              "severity": "high",
+              "remedies": [
+                "Perform Nadi Dosha Nivaran Puja"
+              ]
+            }
+          ],
+          "overall_assessment": "Good compatibility with some doshas that can be remedied"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/kundali/{kundali_id}",
+        "description": "Get stored kundali details",
+        "response": {
+          "kundali_id": "uuid",
+          "rashi": "Vrishabha",
+          "nakshatra": "Rohini",
+          "lagna": "Kanya",
+          "manglik": false
+        }
+      }
+    ],
+    "integration": {
+      "enabled_flag": "astrology_enabled in profiles table",
+      "consent_required": true,
+      "consent_text": "I consent to use my birth details for astrological matching. This is optional and can be disabled anytime."
+    }
+  },
+  "recommendation_engine_design": {
+    "algorithm": "Hybrid recommendation system combining content-based and collaborative filtering",
+    "components": [
+      {
+        "name": "Content-Based Filtering",
+        "description": "Match based on profile attributes and preferences",
+        "weights": {
+          "age_compatibility": 0.20,
+          "location_proximity": 0.15,
+          "education_match": 0.12,
+          "occupation_match": 0.10,
+          "religion_match": 0.15,
+          "caste_match": 0.08,
+          "lifestyle_compatibility": 0.10,
+          "income_match": 0.05,
+          "height_match": 0.05
+        }
+      },
+      {
+        "name": "Collaborative Filtering",
+        "description": "Leverage behavior of similar users",
+        "signals": [
+          "users_with_similar_preferences_sent_interest",
+          "users_with_similar_profiles_were_accepted",
+          "mutual_interest_patterns"
+        ],
+        "weight": 0.30
+      },
+      {
+        "name": "Popularity & Activity Boost",
+        "description": "Boost active and engaged profiles",
+        "factors": [
+          "recently_active_users_boost",
+          "profile_completion_boost",
+          "verification_boost",
+          "premium_user_boost"
+        ],
+        "weight": 0.15
+      },
+      {
+        "name": "Astrology Compatibility",
+        "description": "Factor in astro compatibility if enabled",
+        "condition": "both_users_have_astrology_enabled",
+        "weight": 0.10
+      }
+    ],
+    "scoring_formula": "final_score = (content_score * 0.55) + (collaborative_score * 0.30) + (activity_boost * 0.15) + (astro_score * 0.10 if applicable)",
+    "refresh_strategy": {
+      "daily_recommendations": "Recalculate every 24 hours",
+      "real_time_updates": "Update on preference change, new interest",
+      "cache_ttl": "1 hour for recommendation list"
+    },
+    "ranking_factors": [
+      "compatibility_score DESC",
+      "last_active_at DESC",
+      "is_verified DESC",
+      "profile_completion_percentage DESC",
+      "is_featured DESC",
+      "is_boosted DESC"
+    ]
+  },
+  "privacy_and_legal": {
+    "dpdp_compliance": {
+      "act": "Digital Personal Data Protection Act, 2023 (India)",
+      "requirements": [
+        {
+          "requirement": "Consent for Data Collection",
+          "implementation": "Explicit consent checkbox during registration with clear purpose description"
+        },
+        {
+          "requirement": "Purpose Limitation",
+          "implementation": "Data used only for matchmaking and platform operations, not sold to third parties"
+        },
+        {
+          "requirement": "Data Minimization",
+          "implementation": "Collect only necessary data, optional fields clearly marked"
+        },
+        {
+          "requirement": "Right to Access",
+          "implementation": "Profile export endpoint allowing users to download their data"
+        },
+        {
+          "requirement": "Right to Correction",
+          "implementation": "Profile edit functionality for all user-provided data"
+        },
+        {
+          "requirement": "Right to Erasure",
+          "implementation": "Account deletion endpoint with 30-day recovery window"
+        },
+        {
+          "requirement": "Data Retention Limitation",
+          "implementation": "Defined retention periods, automatic deletion after retention expiry"
+        },
+        {
+          "requirement": "Security Safeguards",
+          "implementation": "Encryption at rest and in transit, access controls, audit logs"
+        },
+        {
+          "requirement": "Grievance Redressal",
+          "implementation": "Dedicated privacy officer contact, response within 48 hours"
+        },
+        {
+          "requirement": "Cross-border Transfer",
+          "implementation": "Data stored in India, no transfer outside without explicit consent"
+        }
+      ],
+      "consent_types": {
+        "registration_consent": "I agree to the Terms of Service and Privacy Policy",
+        "caste_consent": "I voluntarily provide my caste/community information to improve match relevance. This is optional, visible only as you choose, and can be removed anytime.",
+        "astrology_consent": "I consent to use my birth details for astrological matching. This is optional and can be disabled anytime.",
+        "marketing_consent": "I agree to receive promotional communications (optional)"
+      }
+    },
+    "data_retention_policy": {
+      "active_accounts": "Retain all data while account is active",
+      "deleted_accounts": {
+        "soft_delete_period": "30 days (account recoverable)",
+        "hard_delete_after": "90 days from deletion request",
+        "exceptions": "Transaction records (7 years), legal hold data"
+      },
+      "verification_documents": {
+        "retention": "Delete within 30 days after verification",
+        "rejected_documents": "Delete immediately"
+      },
+      "audit_logs": "2 years",
+      "messages": "Delete 1 year after conversation ends"
+    },
+    "privacy_controls": [
+      {
+        "control": "Profile Visibility",
+        "options": [
+          "visible_to_all",
+          "visible_to_matches_only",
+          "hidden"
+        ]
+      },
+      {
+        "control": "Photo Privacy",
+        "options": [
+          "visible_to_all",
+          "visible_to_accepted_interests_only",
+          "photo_request_required"
+        ]
+      },
+      {
+        "control": "Contact Info Display",
+        "options": [
+          "hidden",
+          "visible_to_premium_only",
+          "visible_to_matches_only"
+        ]
+      },
+      {
+        "control": "Online Status",
+        "options": [
+          "show_active_status",
+          "always_appear_offline"
+        ]
+      },
+      {
+        "control": "Caste Visibility",
+        "options": [
+          "hidden",
+          "visible_to_matches_only",
+          "visible_in_search"
+        ]
+      }
+    ]
+  },
+  "infra_manifests": {
+    "dockerfiles": [
+      {
+        "name": "Dockerfile.api",
+        "content": "FROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --only=production\nCOPY . .\nRUN npm run build\n\nFROM node:20-alpine AS runner\nWORKDIR /app\nRUN addgroup --system --gid 1001 nodejs\nRUN adduser --system --uid 1001 apiuser\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nENV NODE_ENV=production\nENV PORT=3000\nUSER apiuser\nEXPOSE 3000\nCMD [\"node\", \"dist/main.js\"]"
+      },
+      {
+        "name": "Dockerfile.frontend",
+        "content": "FROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM nginx:alpine AS runner\nCOPY --from=builder /app/build /usr/share/nginx/html\nCOPY nginx.conf /etc/nginx/nginx.conf\nEXPOSE 80\nCMD [\"nginx\", \"-g\", \"daemon off;\"]"
+      },
+      {
+        "name": "Dockerfile.astro_service",
+        "content": "FROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nENV PYTHONUNBUFFERED=1\nEXPOSE 8001\nCMD [\"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8001\"]"
+      }
+    ],
+    "kubernetes_deployments": [
+      {
+        "name": "deployment.api.yaml",
+        "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: api-server\n  labels:\n    app: vivahbandhan\n    component: api\nspec:\n  replicas: 3\n  selector:\n    matchLabels:\n      app: vivahbandhan\n      component: api\n  template:\n    metadata:\n      labels:\n        app: vivahbandhan\n        component: api\n    spec:\n      containers:\n      - name: api\n        image: vivahbandhan/api:latest\n        ports:\n        - containerPort: 3000\n        env:\n        - name: NODE_ENV\n          value: production\n        - name: DATABASE_URL\n          valueFrom:\n            secretKeyRef:\n              name: db-credentials\n              key: url\n        - name: REDIS_URL\n          valueFrom:\n            secretKeyRef:\n              name: redis-credentials\n              key: url\n        - name: JWT_SECRET\n          valueFrom:\n            secretKeyRef:\n              name: jwt-secrets\n              key: secret\n        resources:\n          requests:\n            memory: \"256Mi\"\n            cpu: \"250m\"\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"\n        livenessProbe:\n          httpGet:\n            path: /health\n            port: 3000\n          initialDelaySeconds: 10\n          periodSeconds: 10\n        readinessProbe:\n          httpGet:\n            path: /ready\n            port: 3000\n          initialDelaySeconds: 5\n          periodSeconds: 5\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: api-service\nspec:\n  selector:\n    app: vivahbandhan\n    component: api\n  ports:\n  - port: 80\n    targetPort: 3000\n  type: ClusterIP"
+      },
+      {
+        "name": "deployment.frontend.yaml",
+        "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: frontend\n  labels:\n    app: vivahbandhan\n    component: frontend\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: vivahbandhan\n      component: frontend\n  template:\n    metadata:\n      labels:\n        app: vivahbandhan\n        component: frontend\n    spec:\n      containers:\n      - name: frontend\n        image: vivahbandhan/frontend:latest\n        ports:\n        - containerPort: 80\n        resources:\n          requests:\n            memory: \"64Mi\"\n            cpu: \"100m\"\n          limits:\n            memory: \"128Mi\"\n            cpu: \"200m\"\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: frontend-service\nspec:\n  selector:\n    app: vivahbandhan\n    component: frontend\n  ports:\n  - port: 80\n    targetPort: 80\n  type: ClusterIP"
+      },
+      {
+        "name": "deployment.opensearch.yaml",
+        "content": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: opensearch\n  labels:\n    app: vivahbandhan\n    component: opensearch\nspec:\n  serviceName: opensearch\n  replicas: 3\n  selector:\n    matchLabels:\n      app: vivahbandhan\n      component: opensearch\n  template:\n    metadata:\n      labels:\n        app: vivahbandhan\n        component: opensearch\n    spec:\n      containers:\n      - name: opensearch\n        image: opensearchproject/opensearch:2.11.0\n        ports:\n        - containerPort: 9200\n        - containerPort: 9600\n        env:\n        - name: cluster.name\n          value: vivahbandhan-cluster\n        - name: node.roles\n          value: cluster_manager,data\n        - name: discovery.seed_hosts\n          value: \"opensearch-0,opensearch-1,opensearch-2\"\n        - name: cluster.initial_cluster_manager_nodes\n          value: \"opensearch-0,opensearch-1,opensearch-2\"\n        - name: bootstrap.memory_lock\n          value: \"true\"\n        - name: OPENSEARCH_JAVA_OPTS\n          value: \"-Xms1g -Xmx1g\"\n        - name: DISABLE_INSTALL_DEMO_CONFIG\n          value: \"true\"\n        - name: DISABLE_SECURITY_PLUGIN\n          value: \"true\"\n        resources:\n          requests:\n            memory: \"2Gi\"\n            cpu: \"500m\"\n          limits:\n            memory: \"4Gi\"\n            cpu: \"1000m\"\n        volumeMounts:\n        - name: opensearch-data\n          mountPath: /usr/share/opensearch/data\n  volumeClaimTemplates:\n  - metadata:\n      name: opensearch-data\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      resources:\n        requests:\n          storage: 50Gi"
+      }
+    ],
+    "kubernetes_configmaps": [
+      {
+        "name": "configmap.app.yaml",
+        "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: app-config\ndata:\n  NODE_ENV: \"production\"\n  LOG_LEVEL: \"info\"\n  RATE_LIMIT_WINDOW_MS: \"60000\"\n  RATE_LIMIT_MAX: \"100\"\n  JWT_EXPIRY: \"900\"\n  REFRESH_TOKEN_EXPIRY: \"604800\"\n  OTP_EXPIRY: \"300\"\n  SEARCH_DAILY_LIMIT_FREE: \"20\"\n  INTEREST_DAILY_LIMIT_FREE: \"5\"\n  SHORTLIST_LIMIT_FREE: \"50\""
+      }
+    ],
+    "kubernetes_ingress": {
+      "name": "ingress.yaml",
+      "content": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: vivahbandhan-ingress\n  annotations:\n    kubernetes.io/ingress.class: nginx\n    cert-manager.io/cluster-issuer: letsencrypt-prod\n    nginx.ingress.kubernetes.io/rate-limit: \"100\"\n    nginx.ingress.kubernetes.io/rate-limit-window: \"1m\"\nspec:\n  tls:\n  - hosts:\n    - vivahbandhan.com\n    - api.vivahbandhan.com\n    secretName: vivahbandhan-tls\n  rules:\n  - host: vivahbandhan.com\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: frontend-service\n            port:\n              number: 80\n  - host: api.vivahbandhan.com\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: api-service\n            port:\n              number: 80"
+    },
+    "opensearch_index_creation": {
+      "name": "create_profile_index.json",
+      "content": "PUT /profiles\n{\n  \"settings\": {\n    \"number_of_shards\": 3,\n    \"number_of_replicas\": 1,\n    \"analysis\": {\n      \"analyzer\": {\n        \"name_analyzer\": {\n          \"type\": \"custom\",\n          \"tokenizer\": \"standard\",\n          \"filter\": [\"lowercase\", \"edge_ngram_filter\"]\n        }\n      },\n      \"filter\": {\n        \"edge_ngram_filter\": {\n          \"type\": \"edge_ngram\",\n          \"min_gram\": 2,\n          \"max_gram\": 20\n        }\n      }\n    }\n  },\n  \"mappings\": {\n    \"properties\": {\n      \"profile_id\": { \"type\": \"keyword\" },\n      \"user_id\": { \"type\": \"keyword\" },\n      \"name\": { \"type\": \"text\", \"analyzer\": \"name_analyzer\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } },\n      \"gender\": { \"type\": \"keyword\" },\n      \"age\": { \"type\": \"integer\" },\n      \"height_cm\": { \"type\": \"integer\" },\n      \"religion\": { \"type\": \"keyword\" },\n      \"caste\": { \"type\": \"keyword\" },\n      \"caste_consent\": { \"type\": \"boolean\" },\n      \"education\": { \"type\": \"keyword\" },\n      \"occupation\": { \"type\": \"keyword\" },\n      \"location_city\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } },\n      \"location_state\": { \"type\": \"keyword\" },\n      \"geo_location\": { \"type\": \"geo_point\" },\n      \"marital_status\": { \"type\": \"keyword\" },\n      \"is_verified\": { \"type\": \"boolean\" },\n      \"is_premium\": { \"type\": \"boolean\" },\n      \"last_active_at\": { \"type\": \"date\" },\n      \"fraud_score\": { \"type\": \"float\" },\n      \"is_banned\": { \"type\": \"boolean\" },\n      \"is_active\": { \"type\": \"boolean\" }\n    }\n  }\n}"
+    }
+  },
+  "ci_cd_pipeline": {
+    "name": ".github/workflows/ci-cd.yaml",
+    "content": "name: CI/CD Pipeline\n\non:\n  push:\n    branches: [main, develop]\n  pull_request:\n    branches: [main, develop]\n\nenv:\n  NODE_VERSION: '20'\n  REGISTRY: ghcr.io\n  IMAGE_NAME_API: ${{ github.repository }}/api\n  IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend\n\njobs:\n  lint-and-test:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Setup Node.js\n      uses: actions/setup-node@v4\n      with:\n        node-version: ${{ env.NODE_VERSION }}\n        cache: 'npm'\n    \n    - name: Install dependencies\n      run: npm ci\n    \n    - name: Run linter\n      run: npm run lint\n    \n    - name: Run tests\n      run: npm run test:coverage\n    \n    - name: Upload coverage\n      uses: codecov/codecov-action@v3\n      with:\n        files: ./coverage/lcov.info\n\n  security-scan:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Run Trivy vulnerability scanner\n      uses: aquasecurity/trivy-action@master\n      with:\n        scan-type: 'fs'\n        scan-ref: '.'\n        severity: 'CRITICAL,HIGH'\n        exit-code: '1'\n    \n    - name: Run Snyk security scan\n      uses: snyk/actions/node@master\n      env:\n        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}\n\n  build-and-push:\n    needs: [lint-and-test, security-scan]\n    runs-on: ubuntu-latest\n    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n    permissions:\n      contents: read\n      packages: write\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Log in to Container Registry\n      uses: docker/login-action@v3\n      with:\n        registry: ${{ env.REGISTRY }}\n        username: ${{ github.actor }}\n        password: ${{ secrets.GITHUB_TOKEN }}\n    \n    - name: Extract metadata\n      id: meta\n      uses: docker/metadata-action@v5\n      with:\n        images: |\n          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}\n          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}\n        tags: |\n          type=sha,prefix=\n          type=ref,event=branch\n          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}\n    \n    - name: Build and push API image\n      uses: docker/build-push-action@v5\n      with:\n        context: ./packages/api\n        push: true\n        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.sha }}\n    \n    - name: Build and push Frontend image\n      uses: docker/build-push-action@v5\n      with:\n        context: ./packages/frontend\n        push: true\n        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}\n\n  deploy-staging:\n    needs: build-and-push\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Set up kubectl\n      uses: azure/setup-kubectl@v3\n    \n    - name: Configure AWS credentials\n      uses: aws-actions/configure-aws-credentials@v4\n      with:\n        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}\n        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n        aws-region: ap-south-1\n    \n    - name: Update kubeconfig\n      run: aws eks update-kubeconfig --name vivahbandhan-staging --region ap-south-1\n    \n    - name: Deploy to staging\n      run: |\n        kubectl set image deployment/api-server api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.sha }} -n staging\n        kubectl set image deployment/frontend frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -n staging\n        kubectl rollout status deployment/api-server -n staging\n        kubectl rollout status deployment/frontend -n staging\n\n  deploy-production:\n    needs: deploy-staging\n    runs-on: ubuntu-latest\n    environment: production\n    if: github.ref == 'refs/heads/main'\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Set up kubectl\n      uses: azure/setup-kubectl@v3\n    \n    - name: Configure AWS credentials\n      uses: aws-actions/configure-aws-credentials@v4\n      with:\n        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}\n        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n        aws-region: ap-south-1\n    \n    - name: Update kubeconfig\n      run: aws eks update-kubeconfig --name vivahbandhan-production --region ap-south-1\n    \n    - name: Deploy to production\n      run: |\n        kubectl set image deployment/api-server api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.sha }} -n production\n        kubectl set image deployment/frontend frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -n production\n        kubectl rollout status deployment/api-server -n production\n        kubectl rollout status deployment/frontend -n production\n\n  integration-tests:\n    needs: deploy-staging\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4\n    \n    - name: Run integration tests\n      run: |\n        npm run test:integration\n      env:\n        API_URL: https://staging-api.vivahbandhan.com"
+  },
+  "security_checklist": {
+    "authentication": [
+      "Argon2id password hashing with minimum memory=64MB, iterations=3, parallelism=4",
+      "JWT access tokens with 15-minute expiry",
+      "Refresh tokens with 7-day expiry, stored hashed in database",
+      "Refresh token rotation on each use",
+      "Device fingerprinting for session tracking",
+      "Rate limiting on authentication endpoints (10 per minute)"
+    ],
+    "authorization": [
+      "Role-based access control for admin functions",
+      "Resource-level authorization checks",
+      "API endpoints require valid JWT token",
+      "Premium feature gating at API layer"
+    ],
+    "data_protection": [
+      "TLS 1.3 for all connections",
+      "Encryption at rest using AES-256",
+      "Sensitive fields encrypted in database (PII)",
+      "Separate encryption keys per environment",
+      "Key rotation policy: 90 days"
+    ],
+    "input_validation": [
+      "Input sanitization on all user inputs",
+      "SQL injection prevention via parameterized queries",
+      "XSS prevention via content security policy",
+      "CSRF protection via same-site cookies",
+      "File upload validation (type, size, content)"
+    ],
+    "infrastructure": [
+      "WAF enabled on all public endpoints",
+      "DDoS protection via cloud provider",
+      "Network segmentation between tiers",
+      "Secrets management via Kubernetes secrets",
+      "Container image scanning in CI pipeline",
+      "Regular security patching"
+    ],
+    "monitoring": [
+      "Sentry for error tracking",
+      "Audit logging for sensitive operations",
+      "Anomaly detection for authentication",
+      "Alerting for suspicious activities",
+      "Regular security audits"
+    ]
+  },
+  "load_test_plan": {
+    "tool": "k6",
+    "scenarios": [
+      {
+        "name": "homepage_load",
+        "description": "Test homepage loading performance",
+        "vus": 100,
+        "duration": "5m",
+        "thresholds": {
+          "http_req_duration": [
+            "p(95)<500"
+          ],
+          "http_req_failed": [
+            "rate<0.01"
+          ]
+        }
+      },
+      {
+        "name": "user_registration",
+        "description": "Test registration flow",
+        "vus": 50,
+        "duration": "10m",
+        "ramp_up": "2m",
+        "thresholds": {
+          "http_req_duration": [
+            "p(95)<1000"
+          ],
+          "http_req_failed": [
+            "rate<0.01"
+          ]
+        }
+      },
+      {
+        "name": "profile_search",
+        "description": "Test search performance under load",
+        "vus": 200,
+        "duration": "10m",
+        "ramp_up": "2m",
+        "thresholds": {
+          "http_req_duration": [
+            "p(95)<800"
+          ],
+          "http_req_failed": [
+            "rate<0.01"
+          ]
+        }
+      },
+      {
+        "name": "send_interest",
+        "description": "Test interest sending under load",
+        "vus": 100,
+        "duration": "5m",
+        "thresholds": {
+          "http_req_duration": [
+            "p(95)<500"
+          ],
+          "http_req_failed": [
+            "rate<0.01"
+          ]
+        }
+      },
+      {
+        "name": "messaging_load",
+        "description": "Test messaging system",
+        "vus": 150,
+        "duration": "10m",
+        "thresholds": {
+          "http_req_duration": [
+            "p(95)<600"
+          ],
+          "http_req_failed": [
+            "rate<0.01"
+          ]
+        }
+      }
+    ],
+    "stages": [
+      {
+        "name": "ramp_up",
+        "duration": "5m",
+        "target_vus": 500
+      },
+      {
+        "name": "sustained_load",
+        "duration": "30m",
+        "target_vus": 500
+      },
+      {
+        "name": "peak_load",
+        "duration": "10m",
+        "target_vus": 1000
+      },
+      {
+        "name": "ramp_down",
+        "duration": "5m",
+        "target_vus": 0
+      }
+    ],
+    "target_metrics": {
+      "total_requests_per_second": 1000,
+      "average_response_time": "< 300ms",
+      "p95_response_time": "< 800ms",
+      "error_rate": "< 0.1%",
+      "concurrent_users": 5000
+    },
+    "test_script": "import http from 'k6/http';\nimport { check, sleep } from 'k6';\nimport { Rate } from 'k6/metrics';\n\nconst errorRate = new Rate('errors');\n\nexport const options = {\n  stages: [\n    { duration: '5m', target: 500 },\n    { duration: '30m', target: 500 },\n    { duration: '10m', target: 1000 },\n    { duration: '5m', target: 0 },\n  ],\n  thresholds: {\n    http_req_duration: ['p(95)<800'],\n    errors: ['rate<0.01'],\n  },\n};\n\nconst BASE_URL = __ENV.BASE_URL || 'https://api.vivahbandhan.com';\n\nexport default function () {\n  // Homepage\n  const homeRes = http.get(`${BASE_URL}/`);\n  check(homeRes, { 'homepage status 200': (r) => r.status === 200 });\n  errorRate.add(homeRes.status !== 200);\n  sleep(1);\n\n  // Login\n  const loginRes = http.post(`${BASE_URL}/v1/auth/login`, JSON.stringify({\n    email: `user${__VU}@test.com`,\n    password: 'TestPassword123!',\n  }), {\n    headers: { 'Content-Type': 'application/json' },\n  });\n  check(loginRes, { 'login status 200': (r) => r.status === 200 });\n  errorRate.add(loginRes.status !== 200);\n  \n  const token = loginRes.json('data.access_token');\n  sleep(1);\n\n  // Search\n  const searchRes = http.post(`${BASE_URL}/v1/search`, JSON.stringify({\n    age_min: 25,\n    age_max: 35,\n    gender: 'female',\n    page: 1,\n    limit: 20,\n  }), {\n    headers: {\n      'Content-Type': 'application/json',\n      'Authorization': `Bearer ${token}`,\n    },\n  });\n  check(searchRes, { 'search status 200': (r) => r.status === 200 });\n  errorRate.add(searchRes.status !== 200);\n  sleep(2);\n}"
+  },
+  "roadmap_milestones": {
+    "week_1": {
+      "theme": "Foundation & Infrastructure Setup",
+      "deliverables": [
+        "Project scaffolding (monorepo structure with packages/api, packages/frontend, packages/shared)",
+        "Docker development environment setup",
+        "PostgreSQL and Redis containers configured",
+        "Fastify server skeleton with health check endpoints",
+        "React app initialization with TypeScript and TailwindCSS",
+        "Redux Toolkit store setup",
+        "CI/CD pipeline skeleton in GitHub Actions"
+      ]
+    },
+    "week_2": {
+      "theme": "Authentication & User Management",
+      "deliverables": [
+        "User registration endpoint with Argon2 password hashing",
+        "Email verification with OTP",
+        "Phone verification with OTP (placeholder for SMS gateway)",
+        "Login endpoint with JWT generation",
+        "Refresh token mechanism",
+        "Logout and token revocation",
+        "Frontend registration and login pages",
+        "Protected route implementation"
+      ]
+    },
+    "week_3": {
+      "theme": "Profile Management",
+      "deliverables": [
+        "Profile creation and update endpoints",
+        "Photo upload to S3 with presigned URLs",
+        "Profile photo gallery component",
+        "Caste consent modal and handling",
+        "Profile completion percentage calculation",
+        "Preferences CRUD endpoints",
+        "Profile settings page",
+        "Profile view page"
+      ]
+    },
+    "week_4": {
+      "theme": "Search & Discovery",
+      "deliverables": [
+        "OpenSearch setup and index creation",
+        "Profile indexing pipeline",
+        "Search endpoint with filters",
+        "Faceted search implementation",
+        "Search results pagination",
+        "Frontend search page with filter panel",
+        "Saved searches functionality",
+        "Daily search quota enforcement"
+      ]
+    },
+    "week_5": {
+      "theme": "Matching & Interactions",
+      "deliverables": [
+        "Interest send/accept/decline endpoints",
+        "Interest daily quota enforcement",
+        "Shortlist functionality",
+        "Recommendation engine v1 (content-based)",
+        "Mutual matches detection",
+        "Frontend interests page",
+        "Frontend shortlist page",
+        "Recommendations carousel on dashboard"
+      ]
+    },
+    "week_6": {
+      "theme": "Messaging & Real-time Features",
+      "deliverables": [
+        "WebSocket server setup",
+        "Real-time messaging implementation",
+        "Message templates for free tier",
+        "Conversations list and chat UI",
+        "Unread message indicators",
+        "Typing indicators",
+        "WebRTC video call infrastructure (SFU setup)",
+        "Video call UI components"
+      ]
+    },
+    "week_7": {
+      "theme": "Trust, Safety & Verification",
+      "deliverables": [
+        "Fraud detection service v1",
+        "Device fingerprinting",
+        "Photo moderation queue (manual)",
+        "Report submission and handling",
+        "Government ID verification flow",
+        "Verification badges display",
+        "Admin dashboard skeleton",
+        "Admin verification review interface"
+      ]
+    },
+    "week_8": {
+      "theme": "Polish & Launch Preparation",
+      "deliverables": [
+        "Performance optimization (caching, query optimization)",
+        "Load testing and bottleneck fixes",
+        "Security audit fixes",
+        "Error handling improvements",
+        "Analytics event tracking",
+        "Email notification templates",
+        "Production deployment configuration",
+        "Soft launch with limited users"
+      ]
+    },
+    "post_launch": {
+      "phase_1_months_2_3": [
+        "Premium subscription implementation",
+        "Payment gateway integration (Razorpay)",
+        "Astrology matching service integration",
+        "Advanced fraud detection (photo similarity)",
+        "Auto photo moderation (NSFW detection)"
+      ],
+      "phase_2_months_4_6": [
+        "Mobile app (React Native)",
+        "Advanced recommendation engine",
+        "Masked calling feature",
+        "Profile boost monetization",
+        "Featured listing monetization"
+      ]
+    }
+  }
+}

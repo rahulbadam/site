@@ -1,0 +1,292 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  phone         String?   @unique
+  passwordHash  String
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  isBanned      Boolean   @default(false)
+  bannedAt      DateTime?
+  bannedReason  String?
+  fraudScore    Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  preferences   Preferences?
+  interestsSent Interest[]       @relation("SentInterests")
+  interestsRecv Interest[]       @relation("ReceivedInterests")
+  matches1      Match[]          @relation("MatchUser1")
+  matches2      Match[]          @relation("MatchUser2")
+  messagesSent  Message[]        @relation("SentMessages")
+  messagesRecv  Message[]        @relation("ReceivedMessages")
+  shortlists    Shortlist[]
+  reportsMade   Report[]         @relation("Reporter")
+  reportsAgainst Report[]        @relation("Reported")
+  verifications Verification[]
+  subscriptions Subscription[]
+  videoCallsMade VideoCall[]     @relation("Caller")
+  videoCallsRecv VideoCall[]     @relation("Receiver")
+
+  @@index([email])
+  @@index([phone])
+  @@index([isActive, isBanned])
+}
+
+model Profile {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  name                     String
+  gender                   String
+  dateOfBirth              DateTime
+  heightCm                 Int?
+  religion                 String?
+  caste                    String?
+  casteConsent             Boolean  @default(false)
+  casteConsentAt           DateTime?
+  subCaste                 String?
+  education                String?
+  occupation               String?
+  incomeRange              String?
+  locationCity             String?
+  locationState            String?
+  locationCountry          String   @default("India")
+  locationPincode          String?
+  latitude                 Float?
+  longitude                Float?
+  maritalStatus            String?
+  diet                     String?
+  smoking                  String?
+  drinking                 String?
+  languages                String[] @default([])
+  aboutMe                  String?
+  profileCompletionPercentage Int   @default(0)
+  isVerified               Boolean  @default(false)
+  verificationLevel        Int      @default(0)
+  lastActiveAt             DateTime?
+  profileViewsCount        Int      @default(0)
+  isFeatured               Boolean  @default(false)
+  featuredUntil            DateTime?
+  isBoosted                Boolean  @default(false)
+  boostUntil               DateTime?
+  astrologyEnabled         Boolean  @default(false)
+  birthTime                String?
+  birthPlace               String?
+  manglik                  Boolean?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos                   Photo[]
+
+  @@index([gender])
+  @@index([religion])
+  @@index([locationCity])
+  @@index([locationState])
+  @@index([isVerified])
+}
+
+model Photo {
+  id               String   @id @default(cuid())
+  profileId        String
+  cdnUrl           String
+  isPrimary        Boolean  @default(false)
+  isVerified       Boolean  @default(false)
+  moderationStatus String   @default("pending")
+  moderationNotes  String?
+  photoOrder       Int      @default(0)
+  uploadedAt       DateTime @default(now())
+
+  profile          Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+model Preferences {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  preferredAgeMin         Int      @default(21)
+  preferredAgeMax         Int      @default(40)
+  preferredHeightMin      Int?
+  preferredHeightMax      Int?
+  preferredReligions      String[] @default([])
+  preferredCastes         String[] @default([])
+  preferredEducations     String[] @default([])
+  preferredOccupations    String[] @default([])
+  preferredLocations      String[] @default([])
+  preferredMaritalStatus  String[] @default([])
+  preferredDiet           String[] @default([])
+  preferredSmoking        String[] @default([])
+  preferredDrinking       String[] @default([])
+  preferredLanguages      String[] @default([])
+  preferredIncomeMin      Int?
+  preferredIncomeMax      Int?
+  maxDistanceKm           Int?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Interest {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  status      String   @default("pending")
+  message     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sender      User     @relation("SentInterests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedInterests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model Match {
+  id                String   @id @default(cuid())
+  user1Id           String
+  user2Id           String
+  compatibilityScore Float?
+  matchSource       String   @default("mutual_interest")
+  astrologyScore    Float?
+  createdAt         DateTime @default(now())
+
+  user1             User     @relation("MatchUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2             User     @relation("MatchUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages          Message[]
+  videoCalls        VideoCall[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model Message {
+  id           String    @id @default(cuid())
+  matchId      String?
+  senderId     String
+  receiverId   String
+  messageType  String    @default("text")
+  content      String?
+  templateId   String?
+  isRead       Boolean   @default(false)
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  sender       User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  match        Match?    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Shortlist {
+  id        String   @id @default(cuid())
+  userId    String
+  profileId String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profileId])
+  @@index([userId])
+}
+
+model Report {
+  id             String    @id @default(cuid())
+  reporterId     String
+  reportedUserId String
+  reportType     String
+  description    String?
+  status         String    @default("pending")
+  adminNotes     String?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  reporter       User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported       User      @relation("Reported", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([status])
+}
+
+model Verification {
+  id               String    @id @default(cuid())
+  userId           String
+  verificationType String
+  status           String    @default("pending")
+  documentType     String?
+  verificationData Json?
+  verifiedBy       String?
+  verifiedAt       DateTime?
+  expiresAt        DateTime?
+  rejectionReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String
+  planType    String
+  status      String    @default("active")
+  startedAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  cancelledAt DateTime?
+  autoRenew   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model VideoCall {
+  id              String    @id @default(cuid())
+  matchId         String
+  callerId        String
+  receiverId      String
+  status          String    @default("pending")
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  roomId          String?
+  createdAt       DateTime  @default(now())
+
+  match           Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  caller          User      @relation("Caller", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver        User      @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+  @@index([callerId])
+  @@index([receiverId])
+}
