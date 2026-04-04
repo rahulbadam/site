@@ -2,12 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  Briefcase,
-  GraduationCap,
   Heart,
   Camera,
   Edit2,
@@ -18,10 +12,6 @@ import {
   Shield,
   Star,
   Users,
-  Sun,
-  Moon,
-  Clock,
-  Home,
   ChevronRight,
   Eye,
   EyeOff,
@@ -29,7 +19,6 @@ import {
   Check,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate } from 'react-router-dom';
 
 // Types
 interface Photo {
@@ -164,7 +153,6 @@ const LANGUAGES = [
 ];
 
 function ProfilePage() {
-  const navigate = useNavigate();
   const { user, accessToken, updateUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -175,7 +163,6 @@ function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
 
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
 
