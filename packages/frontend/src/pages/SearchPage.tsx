@@ -2,13 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search as SearchIcon,
-  Filter,
   Heart,
   MapPin,
   Briefcase,
   GraduationCap,
-  Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   X,
@@ -76,10 +73,8 @@ interface Pagination {
 const RELIGIONS = ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Parsi', 'Jewish', 'Other'];
 const HINDU_CASTES = ['Brahmin', 'Kshatriya', 'Vaishya', 'Shudra', 'Agarwal', 'Baniya', 'Gupta', 'Jain', 'Kayastha', 'Kurmi', 'Rajput', 'Reddy', 'Kamma', 'Kapu', 'Nair', 'Naidu', 'Patel', 'Patil', 'Sharma', 'Singh', 'Yadav', 'Other'];
 const EDUCATION_OPTIONS = ['High School', 'Diploma', "Bachelor's", "Master's", 'Doctorate', 'Professional Degree', 'IIT/IIM', 'MBBS/MD', 'CA/CS', 'Other'];
-const OCCUPATION_OPTIONS = ['Software Professional', 'Doctor', 'Engineer', 'Teacher', 'Business Owner', 'Government Employee', 'Private Employee', 'Self Employed', 'Manager', 'Executive', 'Civil Services', 'Defence', 'Farmer', 'Other'];
 const INDIAN_STATES = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Delhi NCR', 'Other'];
 const MARITAL_STATUS = ['Never Married', 'Divorced', 'Widowed', 'Annulled'];
-const INCOME_RANGES = ['Below ₹3 Lakhs', '₹3-5 Lakhs', '₹5-10 Lakhs', '₹10-20 Lakhs', '₹20-50 Lakhs', 'Above ₹50 Lakhs'];
 
 const defaultFilters: SearchFilters = {
   ageMin: 21,
@@ -100,14 +95,12 @@ const defaultFilters: SearchFilters = {
 
 function SearchPage() {
   const navigate = useNavigate();
-  const { accessToken, user } = useAuthStore();
+  const { accessToken } = useAuthStore();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 12, total: 0, totalPages: 0 });
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [sendingInterest, setSendingInterest] = useState<string | null>(null);
   const [shortlisting, setShortlisting] = useState<string | null>(null);
 

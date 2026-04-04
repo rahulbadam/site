@@ -518,7 +518,6 @@ function ProfilePage() {
                   setEditing={setEditing}
                   saving={saving}
                   onSave={handleSaveProfile}
-                  setSuccess={setSuccess}
                 />
               )}
 
@@ -636,13 +635,7 @@ function ProfilePage() {
               )}
 
               {/* Privacy Tab */}
-              {activeTab === 'privacy' && profile && (
-                <PrivacyTab
-                  profile={profile}
-                  saving={saving}
-                  onSave={handleSaveProfile}
-                />
-              )}
+              {activeTab === 'privacy' && <PrivacyTab />}
             </AnimatePresence>
           </div>
         </div>
@@ -658,14 +651,12 @@ function ProfileBasicTab({
   setEditing,
   saving,
   onSave,
-  setSuccess,
 }: {
   profile: Profile;
   editing: boolean;
   setEditing: (v: boolean) => void;
   saving: boolean;
   onSave: (data: Partial<Profile>) => void;
-  setSuccess: (v: string | null) => void;
 }) {
   const [formData, setFormData] = useState(profile);
 
@@ -1703,15 +1694,7 @@ function PreferencesTab({
   );
 }
 
-function PrivacyTab({
-  profile,
-  saving,
-  onSave,
-}: {
-  profile: Profile;
-  saving: boolean;
-  onSave: (data: Partial<Profile>) => void;
-}) {
+function PrivacyTab() {
   const [showPhotoPrivacy, setShowPhotoPrivacy] = useState(false);
   const [showContactPrivacy, setShowContactPrivacy] = useState(false);
 
