@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
+import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -12,6 +13,10 @@ import AboutPage from './pages/AboutPage';
 import HelpPage from './pages/HelpPage';
 import SafetyPage from './pages/SafetyPage';
 import ContactPage from './pages/ContactPage';
+import AdminPage from './pages/AdminPage';
+import ToastContainer from './components/ToastContainer';
+import OnboardingTour from './components/OnboardingTour';
+import AIChatAssistant from './components/AIChatAssistant';
 
 function App() {
   return (
@@ -31,8 +36,19 @@ function App() {
           <Route path="help" element={<HelpPage />} />
           <Route path="safety" element={<SafetyPage />} />
           <Route path="contact" element={<ContactPage />} />
+          <Route
+            path="admin"
+            element={
+              <ProtectedAdminRoute>
+                <AdminPage />
+              </ProtectedAdminRoute>
+            }
+            />
         </Route>
       </Routes>
+      <ToastContainer />
+      <OnboardingTour />
+      <AIChatAssistant />
     </Router>
   );
 }

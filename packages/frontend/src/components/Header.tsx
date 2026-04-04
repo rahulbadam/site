@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Menu, X, User, LogOut, Sparkles } from 'lucide-react';
+import { Menu, X, User, LogOut, Crown, Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
@@ -8,6 +8,7 @@ function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAuthenticated, user, logout } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,29 +40,32 @@ function Header() {
       transition={{ type: 'spring', stiffness: 100, damping: 20 }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         isScrolled
-          ? 'bg-white/80 backdrop-blur-xl shadow-lg shadow-pink-100/20'
+          ? 'bg-cream-50/95 backdrop-blur-xl shadow-lg border-b border-gold-200/50'
           : 'bg-transparent'
       }`}
     >
+      {/* Decorative top border */}
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-gold-500 to-transparent transition-opacity duration-500 ${isScrolled ? 'opacity-100' : 'opacity-0'}`} />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2 group">
+          <Link to="/" className="flex items-center space-x-3 group">
             <motion.div
               whileHover={{ rotate: 360, scale: 1.1 }}
               transition={{ duration: 0.5 }}
               className="relative"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500 to-violet-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative bg-gradient-to-r from-pink-500 to-violet-500 p-2 rounded-xl">
-                <Heart className="w-6 h-6 text-white" fill="white" />
+              <div className="absolute inset-0 bg-gradient-to-br from-gold-400 to-gold-600 rounded-full blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+              <div className="relative bg-gradient-to-br from-gold-400 to-gold-600 p-2.5 rounded-full border-2 border-gold-300">
+                <Crown className="w-5 h-5 text-maroon-950" />
               </div>
             </motion.div>
             <div className="flex flex-col">
-              <span className={`text-xl font-bold bg-gradient-to-r from-pink-600 to-violet-600 bg-clip-text text-transparent ${isScrolled ? '' : 'drop-shadow-sm'}`}>
+              <span className={`text-xl font-display font-bold text-maroon-950 ${isScrolled ? '' : 'drop-shadow-sm'}`}>
                 VivahBandhan
               </span>
-              <span className="text-[10px] text-gray-400 -mt-1">Find Your Soulmate</span>
+              <span className="text-[10px] text-gold-600 -mt-0.5 font-medium tracking-wide">Trusted Matrimony Partner</span>
             </div>
           </Link>
 
@@ -71,14 +75,14 @@ function Header() {
               <Link
                 key={link.to}
                 to={link.to}
-                className="relative px-4 py-2 text-gray-600 hover:text-pink-600 transition-colors group"
+                className="relative px-4 py-2 text-maroon-800 hover:text-maroon-950 transition-colors group font-medium"
               >
                 <span className="relative z-10">{link.label}</span>
                 <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-pink-50 to-violet-50 rounded-full scale-0 group-hover:scale-100 transition-transform"
+                  className="absolute inset-0 bg-gold-100 rounded-full scale-0 group-hover:scale-100 transition-transform"
                   style={{ transformOrigin: 'center' }}
                 />
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-violet-500 group-hover:w-3/4 transition-all duration-300" />
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-gold-400 to-gold-600 group-hover:w-3/4 transition-all duration-300" />
               </Link>
             ))}
           </nav>
@@ -87,11 +91,23 @@ function Header() {
           <div className="hidden md:flex items-center space-x-3">
             {isAuthenticated ? (
               <>
+                {isAdmin && (
+                  <Link to="/admin">
+                    <motion.div
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-2 px-4 py-2 text-maroon-700 hover:text-maroon-950 transition-colors"
+                    >
+                      <Shield className="w-5 h-5" />
+                      <span className="font-medium">Admin</span>
+                    </motion.div>
+                  </Link>
+                )}
                 <Link to="/dashboard">
                   <motion.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-pink-600 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-maroon-700 hover:text-maroon-950 transition-colors"
                   >
                     <User className="w-5 h-5" />
                     <span className="font-medium">{user?.name || 'Dashboard'}</span>
@@ -101,7 +117,7 @@ function Header() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-red-500 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-maroon-600 hover:text-maroon-950 transition-colors"
                 >
                   <LogOut className="w-5 h-5" />
                   <span>Logout</span>
@@ -113,23 +129,23 @@ function Header() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="px-5 py-2.5 text-gray-600 hover:text-pink-600 font-medium transition-colors"
+                    className="px-5 py-2.5 text-maroon-800 hover:text-maroon-950 font-medium transition-colors"
                   >
                     Sign In
                   </motion.button>
                 </Link>
                 <Link to="/register">
                   <motion.button
-                    whileHover={{ scale: 1.05, boxShadow: '0 10px 30px rgba(236, 72, 153, 0.3)' }}
+                    whileHover={{ scale: 1.05, boxShadow: '0 10px 30px rgba(212, 175, 55, 0.3)' }}
                     whileTap={{ scale: 0.95 }}
-                    className="relative group overflow-hidden bg-gradient-to-r from-pink-500 to-violet-500 text-white px-6 py-2.5 rounded-full font-medium"
+                    className="relative group overflow-hidden bg-gradient-to-r from-gold-500 to-gold-400 text-maroon-950 px-6 py-2.5 rounded-full font-semibold shadow-gold"
                   >
                     <span className="relative z-10 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
+                      <Crown className="w-4 h-4" />
                       Register Free
                     </span>
                     <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-violet-500 to-pink-500"
+                      className="absolute inset-0 bg-gradient-to-r from-gold-400 to-gold-300"
                       initial={{ x: '100%' }}
                       whileHover={{ x: 0 }}
                       transition={{ duration: 0.3 }}
@@ -143,7 +159,7 @@ function Header() {
           {/* Mobile menu button */}
           <motion.button
             whileTap={{ scale: 0.9 }}
-            className="md:hidden p-2 rounded-xl bg-gray-100/80 backdrop-blur-sm"
+            className="md:hidden p-2 rounded-xl bg-gold-100/80 backdrop-blur-sm border border-gold-200/50"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             <AnimatePresence mode="wait">
@@ -155,7 +171,7 @@ function Header() {
                   exit={{ rotate: 90, opacity: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <X className="w-6 h-6 text-gray-700" />
+                  <X className="w-6 h-6 text-maroon-800" />
                 </motion.div>
               ) : (
                 <motion.div
@@ -165,7 +181,7 @@ function Header() {
                   exit={{ rotate: -90, opacity: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Menu className="w-6 h-6 text-gray-700" />
+                  <Menu className="w-6 h-6 text-maroon-800" />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -181,7 +197,7 @@ function Header() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100"
+            className="md:hidden bg-cream-50/95 backdrop-blur-xl border-t border-gold-200/50"
           >
             <div className="px-4 py-6 space-y-2">
               {navLinks.map((link, index) => (
@@ -193,7 +209,7 @@ function Header() {
                 >
                   <Link
                     to={link.to}
-                    className="block px-4 py-3 text-gray-600 hover:text-pink-600 hover:bg-gradient-to-r hover:from-pink-50 hover:to-violet-50 rounded-xl transition-all"
+                    className="block px-4 py-3 text-maroon-800 hover:text-maroon-950 hover:bg-gold-50 rounded-xl transition-all font-medium"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     {link.label}
@@ -204,13 +220,23 @@ function Header() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="pt-4 mt-4 border-t border-gray-100 space-y-3"
+                className="pt-4 mt-4 border-t border-gold-200/50 space-y-3"
               >
                 {isAuthenticated ? (
                   <>
+                    {isAdmin && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center gap-3 px-4 py-3 text-maroon-700 hover:text-maroon-950 hover:bg-gold-50 rounded-xl transition-all"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Shield className="w-5 h-5" />
+                        Admin Dashboard
+                      </Link>
+                    )}
                     <Link
                       to="/dashboard"
-                      className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-pink-600 hover:bg-gradient-to-r hover:from-pink-50 hover:to-violet-50 rounded-xl transition-all"
+                      className="flex items-center gap-3 px-4 py-3 text-maroon-700 hover:text-maroon-950 hover:bg-gold-50 rounded-xl transition-all"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <User className="w-5 h-5" />
@@ -218,7 +244,7 @@ function Header() {
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                      className="flex items-center gap-3 w-full px-4 py-3 text-maroon-600 hover:bg-maroon-50 rounded-xl transition-all"
                     >
                       <LogOut className="w-5 h-5" />
                       Logout
@@ -228,14 +254,14 @@ function Header() {
                   <>
                     <Link
                       to="/login"
-                      className="block text-center px-4 py-3 text-gray-600 hover:text-pink-600 border border-gray-200 rounded-xl transition-all"
+                      className="block text-center px-4 py-3 text-maroon-800 hover:text-maroon-950 border-2 border-gold-300 rounded-xl transition-all font-medium"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Sign In
                     </Link>
                     <Link
                       to="/register"
-                      className="block text-center bg-gradient-to-r from-pink-500 to-violet-500 text-white px-4 py-3 rounded-xl font-medium shadow-lg shadow-pink-200/50"
+                      className="block text-center bg-gradient-to-r from-gold-500 to-gold-400 text-maroon-950 px-4 py-3 rounded-xl font-semibold shadow-gold"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Register Free

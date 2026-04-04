@@ -15,6 +15,7 @@ model User {
   email         String    @unique
   phone         String?   @unique
   passwordHash  String
+  role          String    @default("user") // "user" or "admin"
   emailVerified Boolean   @default(false)
   phoneVerified Boolean   @default(false)
   isActive      Boolean   @default(true)
@@ -40,10 +41,12 @@ model User {
   subscriptions Subscription[]
   videoCallsMade VideoCall[]     @relation("Caller")
   videoCallsRecv VideoCall[]     @relation("Receiver")
+  adminLogs     AdminLog[]       @relation("AdminActions")
 
   @@index([email])
   @@index([phone])
   @@index([isActive, isBanned])
+  @@index([role])
 }
 
 model Profile {
@@ -256,10 +259,14 @@ model Subscription {
   id          String    @id @default(cuid())
   userId      String
   planType    String
+  amount      Int       @default(0) // Amount in INR
   status      String    @default("active")
+  paymentId   String?   // Payment gateway reference
   startedAt   DateTime  @default(now())
   expiresAt   DateTime?
   cancelledAt DateTime?
+  refundedAt  DateTime?
+  refundAmount Int?
   autoRenew   Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -268,6 +275,26 @@ model Subscription {
 
   @@index([userId])
   @@index([status])
+  @@index([planType])
+}
+
+model AdminLog {
+  id          String    @id @default(cuid())
+  adminId     String
+  action      String    // "ban_user", "unban_user", "approve_verification", etc.
+  targetType  String    // "user", "report", "verification", "subscription"
+  targetId    String?
+  details     Json?     // Additional details about the action
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  admin       User      @relation("AdminActions", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
 
 model VideoCall {

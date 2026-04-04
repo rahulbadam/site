@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createServer } from 'http';
 
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -6,6 +7,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import jwt from '@fastify/jwt';
 import Fastify from 'fastify';
+import { initializeSocketIO } from './socket.js';
 
 import { authRoutes } from './routes/auth.js';
 import { profileRoutes } from './routes/profiles.js';
@@ -14,6 +16,8 @@ import { interestRoutes } from './routes/interests.js';
 import { messageRoutes } from './routes/messages.js';
 import { subscriptionRoutes } from './routes/subscriptions.js';
 import { adminRoutes } from './routes/admin.js';
+import { matchingRoutes } from './routes/matching.js';
+import { aiRoutes } from './routes/ai.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { rateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/requestLogger.js';
@@ -34,6 +38,12 @@ const fastify = Fastify({
         : undefined,
   },
 });
+
+// Create HTTP server for Socket.io
+const httpServer = createServer(fastify.server);
+
+// Initialize Socket.io
+const io = initializeSocketIO(httpServer);
 
 async function buildServer() {
   await fastify.register(helmet, {
@@ -93,6 +103,8 @@ async function buildServer() {
   await fastify.register(messageRoutes, { prefix: '/api/v1/messages' });
   await fastify.register(subscriptionRoutes, { prefix: '/api/v1/subscriptions' });
   await fastify.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await fastify.register(matchingRoutes, { prefix: '/api/v1/matching' });
+  await fastify.register(aiRoutes, { prefix: '/api/v1/ai' });
 
   fastify.get('/health', async () => ({
     status: 'ok',
@@ -109,9 +121,12 @@ async function start() {
     const port = parseInt(process.env.PORT || '4000', 10);
     const host = process.env.HOST || '0.0.0.0';
 
-    await app.listen({ port, host });
-    app.log.info(`Server running at http://${host}:${port}`);
-    app.log.info(`API Documentation available at http://${host}:${port}/documentation`);
+    // Use HTTP server with Socket.io instead of Fastify's listen
+    httpServer.listen(port, host, () => {
+      app.log.info(`Server running at http://${host}:${port}`);
+      app.log.info(`API Documentation available at http://${host}:${port}/documentation`);
+      app.log.info(`Socket.io enabled for real-time chat`);
+    });
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
