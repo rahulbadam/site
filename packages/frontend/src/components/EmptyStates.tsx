@@ -1,13 +1,11 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { 
-  Heart, 
-  Users, 
-  MessageCircle, 
-  Search, 
-  FileText, 
-  Bell, 
-  Shield, 
+import {
+  Heart,
+  Search,
+  FileText,
+  Bell,
+  Shield,
   Camera,
   UserPlus,
   Inbox,
@@ -27,12 +25,11 @@ interface EmptyStateProps {
   illustration?: 'profiles' | 'messages' | 'search' | 'notifications' | 'default';
 }
 
-export function EmptyState({ 
-  icon: Icon = FileText, 
-  title, 
-  description, 
+export function EmptyState({
+  icon: Icon = FileText,
+  title,
+  description,
   action,
-  illustration = 'default' 
 }: EmptyStateProps) {
   return (
     <motion.div

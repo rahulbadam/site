@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Send, X, Sparkles, User, Loader2 } from 'lucide-react';
+import { Send, X, Sparkles, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface Message {

@@ -162,7 +162,7 @@ export function useConversation(matchId: string | null) {
     });
 
     // Listen for read receipts
-    socket.on('message:read', ({ messageId, readBy }: { messageId: string; readBy: string }) => {
+    socket.on('message:read', ({ messageId }: { messageId: string; readBy: string }) => {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId ? { ...m, isRead: true, readAt: new Date().toISOString() } : m

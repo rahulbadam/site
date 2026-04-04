@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Moon, Sun, Users, MapPin, Heart, ChevronDown, ChevronUp, Info, Sparkles } from 'lucide-react';
+import { Star, Moon, ChevronDown, ChevronUp, Info, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface MatchBreakdown {

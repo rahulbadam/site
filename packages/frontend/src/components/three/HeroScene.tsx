@@ -1,6 +1,6 @@
 import { useRef, useMemo, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Float, Environment } from '@react-three/drei';
+import { Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
 // Elegant Wedding Pillar - Side Only
