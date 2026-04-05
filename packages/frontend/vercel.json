@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm install --prefix ../.. && npm run build --workspace=packages/shared && npm run build",
+  "buildCommand": "cd ../.. && npm install && npm run build:shared && cd packages/frontend && npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "installCommand": "npm install --prefix ../.."
+  "installCommand": "cd ../.. && npm install"
 }
