@@ -4,9 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd .. && npm install && npm run build --workspace=packages/shared && npm run build --workspace=packages/api
-    startCommand: npm run start --prefix packages/api
-    rootDir: packages/api
+    buildCommand: npm install && npm run build:shared && npm run build:api
+    startCommand: npm run start --workspace=packages/api
     envVars:
       - key: NODE_ENV
         value: production
